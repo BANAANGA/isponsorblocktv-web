@@ -349,6 +349,8 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self'; style-src 'self'; "
         "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
