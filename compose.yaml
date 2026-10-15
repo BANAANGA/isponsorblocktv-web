@@ -1,0 +1,17 @@
+services:
+  isponsorblocktv-web:
+    build: .
+    container_name: isponsorblocktv-web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      WEB_USERNAME: ${WEB_USERNAME:?Set WEB_USERNAME in your environment}
+      WEB_PASSWORD: ${WEB_PASSWORD:?Set WEB_PASSWORD in your environment}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ISPBTV_DATA_DIR: /data
+    volumes:
+      - isponsorblocktv-data:/data
+
+volumes:
+  isponsorblocktv-data:

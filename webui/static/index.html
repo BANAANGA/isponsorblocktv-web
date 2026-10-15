@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>iSponsorBlockTV Web</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="iSponsorBlockTV Web home">
+          <span class="brand-mark">iS</span>
+          <span>iSponsorBlockTV <small>WEB MANAGER</small></span>
+        </a>
+        <div id="header-actions" class="header-actions" hidden>
+          <span id="service-indicator" class="status-pill">Checking service</span>
+          <button id="logout-button" class="button button-quiet" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <section id="login-panel" class="login-panel" hidden>
+        <div class="eyebrow">SELF-HOSTED CONTROL PANEL</div>
+        <h1>Welcome back</h1>
+        <p>Sign in to manage your YouTube TV devices and SponsorBlock settings.</p>
+        <form id="login-form" class="stack">
+          <label>Username<input name="username" autocomplete="username" required></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="button button-primary" type="submit">Sign in</button>
+          <p id="login-error" class="error" role="alert"></p>
+        </form>
+      </section>
+
+      <section id="app-panel" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">YOUR INSTANCE</div>
+            <h1>Management</h1>
+            <p>Configure devices, control the service, and inspect its live output.</p>
+          </div>
+          <div class="service-actions">
+            <button id="start-button" class="button button-primary" type="button">Start service</button>
+            <button id="stop-button" class="button button-quiet" type="button">Stop service</button>
+          </div>
+        </div>
+
+        <nav class="tabs" aria-label="Management sections">
+          <button class="tab active" data-tab="settings" type="button">Settings</button>
+          <button class="tab" data-tab="logs" type="button">Logs <span id="log-count" class="count"></span></button>
+        </nav>
+
+        <section id="settings-tab" class="tab-content">
+          <form id="settings-form">
+            <div class="card">
+              <div class="card-heading">
+                <div><h2>TV devices</h2><p>Pair with a YouTube TV app or discover devices on your local network.</p></div>
+                <button id="discover-button" class="button button-secondary" type="button">Discover devices</button>
+              </div>
+              <p class="notice">Device discovery may launch YouTube on compatible devices. The app needs local-network access for discovery.</p>
+              <div id="discovered-devices" class="discovered-list"></div>
+              <div id="devices-list" class="device-list"></div>
+              <div class="pair-row">
+                <label class="grow">12-digit pairing code<input id="pairing-code" inputmode="numeric" maxlength="16" placeholder="123 456 789 012"></label>
+                <label class="grow">Device name<input id="pairing-name" maxlength="200" placeholder="Living room TV"></label>
+                <button id="pair-button" class="button button-primary" type="button">Pair device</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-heading"><div><h2>SponsorBlock</h2><p>Choose which video segments to skip and how to report skips.</p></div></div>
+              <fieldset class="category-grid">
+                <legend>Skip categories</legend>
+                <label><input type="checkbox" name="category" value="sponsor"> Sponsor</label>
+                <label><input type="checkbox" name="category" value="selfpromo"> Self promotion</label>
+                <label><input type="checkbox" name="category" value="exclusive_access"> Exclusive access</label>
+                <label><input type="checkbox" name="category" value="interaction"> Interaction reminder</label>
+                <label><input type="checkbox" name="category" value="intro"> Intro</label>
+                <label><input type="checkbox" name="category" value="outro"> Outro</label>
+                <label><input type="checkbox" name="category" value="preview"> Preview / recap</label>
+                <label><input type="checkbox" name="category" value="filler"> Filler</label>
+                <label><input type="checkbox" name="category" value="music_offtopic"> Off-topic music</label>
+                <label><input type="checkbox" name="category" value="hook"> Hook / greeting</label>
+              </fieldset>
+              <div class="field-grid">
+                <label>Minimum segment length (seconds)<input name="minimum_skip_length" type="number" min="0" max="3600" step="0.1"></label>
+                <label>Device join name<input name="join_name" maxlength="200" required></label>
+                <label>Skip segments reported<input name="skip_count_tracking" type="checkbox"> Send skipped segment counts to SponsorBlock</label>
+                <label>Automatic ad mute<input name="mute_ads" type="checkbox"> Mute native YouTube ads</label>
+                <label>Automatic ad skip<input name="skip_ads" type="checkbox"> Press Skip Ad when available</label>
+                <label>Autoplay<input name="auto_play" type="checkbox"> Enable autoplay</label>
+              </div>
+              <label class="full-width">SponsorBlock API URL<input name="sponsorblock_api_url" type="url" required></label>
+            </div>
+
+            <div class="card">
+              <div class="card-heading"><div><h2>Channel whitelist</h2><p>Whitelisted channels are excluded from SponsorBlock skipping. A YouTube Data API key is required.</p></div></div>
+              <label class="full-width">YouTube Data API key<input name="apikey" type="password" autocomplete="new-password"></label>
+              <div class="pair-row channel-search">
+                <label class="grow">Search YouTube channels<input id="channel-query" maxlength="200" placeholder="Channel name"></label>
+                <button id="channel-search-button" class="button button-secondary" type="button">Search</button>
+              </div>
+              <div id="channel-results" class="channel-results"></div>
+              <div class="pair-row">
+                <label class="grow">Custom channel ID<input id="custom-channel-id" maxlength="256" placeholder="UC..."></label>
+                <label class="grow">Channel name<input id="custom-channel-name" maxlength="200" placeholder="Channel name"></label>
+                <button id="add-custom-channel" class="button button-secondary" type="button">Add channel</button>
+              </div>
+              <div id="channel-list" class="channel-list"></div>
+            </div>
+
+            <div class="card advanced-card">
+              <div class="card-heading"><div><h2>Advanced options</h2><p>Optional networking and diagnostic controls for the upstream service.</p></div></div>
+              <div class="field-grid">
+                <label><input name="use_proxy" type="checkbox"> Route service requests through the system proxy</label>
+                <label><input name="debug" type="checkbox"> Enable debug logging</label>
+                <label><input name="http_tracing" type="checkbox"> Trace HTTP requests and responses</label>
+              </div>
+            </div>
+
+            <div class="save-row">
+              <p id="save-message" role="status"></p>
+              <button class="button button-primary" type="submit">Save settings</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="logs-tab" class="tab-content" hidden>
+          <div class="card log-card">
+            <div class="card-heading">
+              <div><h2>Service logs</h2><p>Latest output from the iSponsorBlockTV service process.</p></div>
+              <div class="log-actions">
+                <label class="toggle-label"><input id="auto-refresh" type="checkbox" checked> Auto-refresh</label>
+                <button id="refresh-logs" class="button button-secondary" type="button">Refresh</button>
+                <button id="clear-logs" class="button button-quiet" type="button">Clear view</button>
+              </div>
+            </div>
+            <pre id="log-output" class="log-output" aria-live="polite">Loading logs...</pre>
+          </div>
+        </section>
+      </section>
+      <div id="toast" class="toast" role="status" hidden></div>
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
