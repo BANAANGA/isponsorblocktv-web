@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "isponsorblocktv-web"
+version = "0.1.0"
+description = "Authenticated web management interface for iSponsorBlockTV"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-only"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "itsdangerous>=2.2,<3",
+    "uvicorn[standard]>=0.34,<1",
+    "iSponsorBlockTV==2.11.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["webui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
