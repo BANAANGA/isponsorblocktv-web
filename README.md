@@ -8,22 +8,48 @@ and skipping, and device communication.
 
 ## Install with Docker Compose
 
-### Requirements
+### One-line install
 
-- Docker Engine with the Docker Compose plugin.
+On a Linux host with Docker Engine and the Docker Compose plugin installed and
+running, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BANAANGA/isponsorblocktv-web/main/install.sh | bash
+```
+
+The installer clones the app into
+`~/.local/share/isponsorblocktv-web`, prompts you to create a username and
+password, builds and starts the container, and keeps its configuration and logs
+in a Docker volume. The password prompt is hidden; use 12-128 letters, numbers,
+underscores, or hyphens. Then open `http://localhost:8000` and sign in.
+
+To install into a different directory, set `ISPBTV_INSTALL_DIR` before running
+the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BANAANGA/isponsorblocktv-web/main/install.sh \
+  | ISPBTV_INSTALL_DIR="$HOME/apps/isponsorblocktv-web" bash
+```
+
+### Requirements and manual install
+
+- Docker Engine with the Docker Compose plugin, running under your user.
 - A computer or server that can reach the internet and, for automatic device
   discovery, the same local network as the TVs.
 
-### Start the web manager
-
-From the repository directory, set the administrator credentials and build and
-start the container:
+To install manually, run these commands from a terminal:
 
 ```sh
-export WEB_USERNAME=admin
-export WEB_PASSWORD='use-a-long-unique-password'
+git clone https://github.com/BANAANGA/isponsorblocktv-web.git
+cd isponsorblocktv-web
+read -r -p "Username: " WEB_USERNAME
+read -r -s -p "Password: " WEB_PASSWORD; printf '\n'
+export WEB_USERNAME WEB_PASSWORD
 docker compose up --build -d
 ```
+
+The installer above is recommended: it validates the credentials and saves them
+in a protected `.env` file so they persist across shell sessions and restarts.
 
 Open `http://localhost:8000` on the host running Docker and sign in with the
 credentials you configured. To sign in from another computer on the network,
