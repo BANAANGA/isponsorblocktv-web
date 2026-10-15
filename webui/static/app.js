@@ -194,7 +194,8 @@ function renderDiscovered(devices) {
 
 document.querySelector("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const loginForm = event.currentTarget;
+  const form = new FormData(loginForm);
   const errorElement = document.querySelector("#login-error");
   errorElement.textContent = "";
   try {
@@ -202,7 +203,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
       method: "POST",
       body: JSON.stringify({ username: form.get("username"), password: form.get("password") }),
     });
-    event.currentTarget.reset();
+    loginForm.reset();
     await showApp(result.csrf_token);
   } catch (error) {
     errorElement.textContent = error.message;
