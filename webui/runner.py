@@ -125,6 +125,12 @@ def install_activity_hooks(store: ActivityStore) -> None:
             position = float(getattr(state, "currentTime", 0) or 0)
         except (TypeError, ValueError):
             position = 0.0
+        try:
+            duration = float(getattr(state, "duration", 0) or 0)
+        except (TypeError, ValueError):
+            duration = 0.0
+        if not math.isfinite(duration) or duration <= 0:
+            duration = 0.0
         previous = getattr(self, "_webui_last_playback", None)
         watched_seconds = _observed_watch_seconds(previous, video_id, position, time_start)
         if watched_seconds:
@@ -138,7 +144,13 @@ def install_activity_hooks(store: ActivityStore) -> None:
                     self.api_helper, "_webui_listeners", set()
                 )
                 self.api_helper._webui_listeners.add(self)
-                store.record_video(video_id, video_id, self.name, 0)
+                store.record_video(
+                    video_id,
+                    video_id,
+                    self.name,
+                    0,
+                    duration_seconds=duration,
+                )
                 if getattr(self, "_webui_metadata_video_id", None) != video_id:
                     self._webui_metadata_video_id = video_id
                     self._webui_metadata_task = asyncio.create_task(
@@ -153,8 +165,6 @@ def install_activity_hooks(store: ActivityStore) -> None:
     async def skip(self, time_to: float, position: float, uuids: list[str]):
         await original_skip(self, time_to, position, uuids)
         current_video_id = getattr(self, "_webui_current_video_id", "")
-        if current_video_id:
-            store.record_watch_time(current_video_id, self.name, max(0.0, time_to))
         current_playback = getattr(self, "_webui_last_playback", None)
         if current_playback and current_playback[1]:
             self._webui_last_playback = (

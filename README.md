@@ -172,7 +172,10 @@ saved logs.
 - Start/stop controls and a live-refreshing log viewer for the upstream
   service, with log persistence, rotation, and a control to permanently delete
   saved logs.
-- Video history with direct YouTube links and statistics for watched videos,
+- Video history with direct YouTube links and an estimated viewed percentage
+  based on observed playback time and the duration reported by the TV device.
+  The percentage is capped at 100%; unavailable durations are shown as such.
+  History also includes statistics for watched videos,
   thumbnails, public video titles and channel names, skipped segments by
   category and device, skip events, and estimated time saved overall and over
   the last 30 days. The Dashboard tab is the first page shown after sign-in and

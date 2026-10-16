@@ -192,6 +192,7 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .history-video a { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .history-video a:hover { color: var(--accent); }
 .history-video small, .history-row time, .history-device { color: var(--muted); font-size: 11px; }
+.history-video .history-progress { color: #82e6a0; font-weight: 600; }
 .history-video .history-channel { color: var(--muted); font-size: inherit; font-weight: 400; }
 .history-video .history-channel:hover { color: var(--accent); }
 .history-row time { text-align: right; }

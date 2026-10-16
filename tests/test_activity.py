@@ -19,15 +19,23 @@ class ActivityStoreTests(unittest.TestCase):
 
     def test_history_groups_playback_updates_for_same_video(self) -> None:
         now = datetime(2026, 10, 16, 12, tzinfo=UTC)
-        self.store.record_video("video-1", "Video", "Living room", 2, now=now)
         self.store.record_video(
-            "video-1", "Video", "Living room", 3, now=now + timedelta(minutes=2)
+            "video-1", "Video", "Living room", 2, duration_seconds=300, now=now
+        )
+        self.store.record_video(
+            "video-1",
+            "Video",
+            "Living room",
+            3,
+            duration_seconds=420,
+            now=now + timedelta(minutes=2),
         )
 
         history = self.store.history()
 
         self.assertEqual(history["total"], 1)
         self.assertEqual(history["items"][0]["segment_count"], 3)
+        self.assertEqual(history["items"][0]["duration_seconds"], 420)
         self.assertEqual(history["items"][0]["started_at"], now.isoformat())
 
     def test_history_records_a_new_session_after_a_gap(self) -> None:
@@ -38,6 +46,27 @@ class ActivityStoreTests(unittest.TestCase):
         )
 
         self.assertEqual(self.store.history()["total"], 2)
+
+    def test_history_percentage_uses_watched_time_and_caps_at_video_duration(self) -> None:
+        now = datetime(2026, 10, 16, 12, tzinfo=UTC)
+        self.store.record_video(
+            "video-1", "Video", "Living room", 0, duration_seconds=200, now=now
+        )
+        self.store.record_watch_time("video-1", "Living room", 80, now=now)
+
+        video = self.store.history()["items"][0]
+
+        self.assertEqual(video["viewed_percent"], 40)
+        self.assertEqual(video["duration_seconds"], 200)
+
+        self.store.record_watch_time("video-1", "Living room", 200, now=now)
+        self.assertEqual(self.store.history()["items"][0]["viewed_percent"], 100)
+
+    def test_history_percentage_is_unavailable_without_video_duration(self) -> None:
+        self.store.record_video("video-1", "Video", "Living room", 0)
+        self.store.record_watch_time("video-1", "Living room", 60)
+
+        self.assertIsNone(self.store.history()["items"][0]["viewed_percent"])
 
     def test_history_limit_prunes_oldest_sessions_and_can_be_reduced(self) -> None:
         start = datetime(2026, 10, 16, 12, tzinfo=UTC)
@@ -258,6 +287,7 @@ class ActivityStoreTests(unittest.TestCase):
         with sqlite3.connect(legacy_path) as connection:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(video_history)")}
         self.assertIn("watched_seconds", columns)
+        self.assertIn("duration_seconds", columns)
 
     def test_activity_migration_backfills_daily_watch_totals(self) -> None:
         legacy_path = Path(self.temporary_directory.name) / "watched.sqlite3"
