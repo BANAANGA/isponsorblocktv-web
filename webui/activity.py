@@ -16,6 +16,9 @@ class ActivityStore:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     video_id TEXT NOT NULL,
                     title TEXT NOT NULL,
+                    channel TEXT NOT NULL DEFAULT '',
+                    channel_url TEXT NOT NULL DEFAULT '',
+                    thumbnail_url TEXT NOT NULL DEFAULT '',
                     device TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
@@ -42,6 +45,15 @@ class ActivityStore:
                 );
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(video_history)").fetchall()
+            }
+            for name in ("channel", "channel_url", "thumbnail_url"):
+                if name not in columns:
+                    connection.execute(
+                        f"ALTER TABLE video_history ADD COLUMN {name} TEXT NOT NULL DEFAULT ''"
+                    )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -65,6 +77,9 @@ class ActivityStore:
         title: str,
         device: str,
         segment_count: int,
+        channel: str = "",
+        channel_url: str = "",
+        thumbnail_url: str = "",
         *,
         now: datetime | None = None,
     ) -> None:
@@ -82,18 +97,81 @@ class ActivityStore:
                 connection.execute(
                     """
                     UPDATE video_history
-                    SET title = ?, last_seen_at = ?, segment_count = MAX(segment_count, ?)
+                    SET title = CASE WHEN channel != '' AND ? = video_id THEN title ELSE ? END,
+                        channel = COALESCE(NULLIF(?, ''), channel),
+                        channel_url = COALESCE(NULLIF(?, ''), channel_url),
+                        thumbnail_url = COALESCE(NULLIF(?, ''), thumbnail_url),
+                        last_seen_at = ?, segment_count = MAX(segment_count, ?)
                     WHERE id = ?
                     """,
-                    (title, timestamp, segment_count, recent["id"]),
+                    (
+                        title,
+                        title,
+                        channel,
+                        channel_url,
+                        thumbnail_url,
+                        timestamp,
+                        segment_count,
+                        recent["id"],
+                    ),
                 )
                 return
             connection.execute(
                 """
-                INSERT INTO video_history (video_id, title, device, started_at, last_seen_at, segment_count)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO video_history (
+                    video_id, title, channel, channel_url, thumbnail_url, device,
+                    started_at, last_seen_at, segment_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (video_id, title, device, timestamp, timestamp, segment_count),
+                (
+                    video_id,
+                    title,
+                    channel,
+                    channel_url,
+                    thumbnail_url,
+                    device,
+                    timestamp,
+                    timestamp,
+                    segment_count,
+                ),
+            )
+
+    def update_video_metadata(
+        self,
+        video_id: str,
+        device: str,
+        title: str,
+        channel: str,
+        channel_url: str,
+        thumbnail_url: str,
+    ) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                UPDATE video_history SET title = ?, channel = ?, channel_url = ?,
+                    thumbnail_url = ?
+                WHERE id = (
+                    SELECT id FROM video_history
+                    WHERE video_id = ? AND device = ?
+                    ORDER BY started_at DESC LIMIT 1
+                )
+                """,
+                (title, channel, channel_url, thumbnail_url, video_id, device),
+            )
+
+    def update_video_segment_count(self, video_id: str, device: str, segment_count: int) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                UPDATE video_history SET segment_count = MAX(segment_count, ?)
+                WHERE id = (
+                    SELECT id FROM video_history
+                    WHERE video_id = ? AND device = ?
+                    ORDER BY started_at DESC LIMIT 1
+                )
+                """,
+                (max(0, segment_count), video_id, device),
             )
 
     def record_skip(
@@ -136,7 +214,8 @@ class ActivityStore:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT video_id, title, device, started_at, last_seen_at, segment_count
+                SELECT video_id, title, channel, channel_url, thumbnail_url,
+                    device, started_at, last_seen_at, segment_count
                 FROM video_history ORDER BY started_at DESC LIMIT ? OFFSET ?
                 """,
                 (limit, offset),

@@ -139,10 +139,13 @@ saved logs.
 - Start/stop controls and a live-refreshing log viewer for the upstream
   service, with log persistence and rotation.
 - Video history with direct YouTube links and statistics for watched videos,
-  skipped segments by category and device, skip events, and estimated time
-  saved overall and over the last 30 days.
+  thumbnails, public video titles and channel names, skipped segments by
+  category and device, skip events, and estimated time saved overall and over
+  the last 30 days. The Stats tab is the first page shown after sign-in and
+  includes daily and category graphs.
 - Activity is recorded from the time this version is installed; the upstream
-  service does not provide older playback history to backfill.
+  service does not provide older playback history to backfill. Video metadata
+  is looked up using YouTube's public oEmbed endpoint.
 - Persistent upstream configuration in `/data/config.json`, web-manager
   settings in `/data/webui-settings.json`, and activity in
   `/data/activity.sqlite3`.

@@ -69,6 +69,7 @@ async function showApp(token) {
   renderSettings();
   await refreshService();
   await refreshLogs();
+  await refreshStats();
   clearInterval(logPolling);
   logPolling = setInterval(() => {
     if (!document.querySelector("#auto-refresh")?.checked) return;
@@ -205,9 +206,15 @@ async function refreshHistory(reset = true) {
   const result = await api(`/api/history?limit=${historyPageSize}&offset=${historyOffset}`);
   const items = result.items.map((video) => `
     <article class="history-row">
+      <a class="history-thumbnail" href="https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${escapeHtml(video.title || video.video_id)}">
+        <img src="${escapeHtml(video.thumbnail_url || `https://i.ytimg.com/vi/${encodeURIComponent(video.video_id)}/hqdefault.jpg`)}" alt="" loading="lazy">
+        <span class="play-icon" aria-hidden="true">▶</span>
+      </a>
       <div class="history-video">
         <a href="https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(video.title || video.video_id)}</a>
-        <small>${escapeHtml(video.video_id)} · ${Number(video.segment_count) || 0} SponsorBlock segments found</small>
+        <small>${video.channel_url
+          ? `<a class="history-channel" href="${escapeHtml(video.channel_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(video.channel || "Unknown channel")}</a>`
+          : escapeHtml(video.channel || "Unknown channel")} · ${Number(video.segment_count) || 0} SponsorBlock segments found</small>
       </div>
       <span class="history-device">${escapeHtml(video.device)}</span>
       <time datetime="${escapeHtml(video.started_at)}">${escapeHtml(formatDate(video.started_at))}</time>
@@ -258,6 +265,22 @@ async function refreshStats() {
     unknown: "Other",
   };
   const categories = document.querySelector("#category-stats");
+  const chart = document.querySelector("#category-chart");
+  if (stats.by_category.length) {
+    const maximumCategorySeconds = Math.max(1, ...stats.by_category.map((item) => Number(item.seconds_saved) || 0));
+    chart.innerHTML = stats.by_category.map((item) => {
+      const seconds = Number(item.seconds_saved) || 0;
+      const width = Math.max(1, seconds / maximumCategorySeconds * 100);
+      const name = categoryNames[item.category] || item.category;
+      return `<div class="category-chart-row">
+        <span>${escapeHtml(name)}</span>
+        <progress class="category-bar" value="${Math.round(width)}" max="100" aria-label="${escapeHtml(name)}: ${escapeHtml(formatDuration(seconds))} saved"></progress>
+        <strong>${escapeHtml(formatDuration(seconds))}</strong>
+      </div>`;
+    }).join("");
+  } else {
+    chart.innerHTML = '<div class="empty-state">Category charts will appear after the first skip.</div>';
+  }
   categories.innerHTML = stats.by_category.length
     ? stats.by_category.map((item) => `
       <tr><td>${escapeHtml(categoryNames[item.category] || item.category)}</td>
@@ -483,6 +506,9 @@ document.querySelector("#stop-button").addEventListener("click", async () => {
 });
 
 document.querySelector("#refresh-logs").addEventListener("click", refreshLogs);
+document.querySelector("#refresh-stats").addEventListener("click", () => {
+  refreshStats().catch((error) => notify(error.message, true));
+});
 document.querySelector("#refresh-history").addEventListener("click", () => {
   refreshHistory().catch((error) => notify(error.message, true));
 });
@@ -512,7 +538,13 @@ document.querySelectorAll(".tab").forEach((tab) => {
 async function initialize() {
   try {
     const state = await api("/api/auth/status");
-    if (state.authenticated) await showApp(state.csrf_token);
+    if (state.authenticated) {
+      await showApp(state.csrf_token);
+      document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === "stats"));
+      document.querySelectorAll(".tab-content").forEach((section) => {
+        section.hidden = section.id !== "stats-tab";
+      });
+    }
     else showLogin();
   } catch (error) {
     showLogin();
