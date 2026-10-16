@@ -144,6 +144,7 @@ function collectSettings() {
     use_proxy: form.elements.use_proxy.checked,
     debug: form.elements.debug.checked,
     http_tracing: form.elements.http_tracing.checked,
+    max_history_videos: Number(form.elements.max_history_videos.value),
     sponsorblock_api_url: form.elements.sponsorblock_api_url.value.trim(),
   };
 }
@@ -290,13 +291,13 @@ async function refreshStats() {
   const total = stats.totals;
   const recent = stats.last_30_days;
   document.querySelector("#total-stats").innerHTML = [
-    renderMetric("Videos watched", total.videos_watched),
+    renderMetric("Videos in history", total.videos_watched, "within configured retention limit"),
     renderMetric("Skip events", total.skip_events, `${total.segments_skipped} submitted segments`),
     renderMetric("Time saved", formatDuration(total.seconds_saved), `${Number(total.seconds_saved).toFixed(0)} seconds total`),
     renderMetric("Saved days", `${Number(total.time_saved_days).toFixed(2)} days`),
   ].join("");
   document.querySelector("#recent-stats").innerHTML = [
-    renderMetric("Videos", recent.videos_watched),
+    renderMetric("Videos logged", recent.videos_watched),
     renderMetric("Skip events", recent.skip_events),
     renderMetric("Segments skipped", recent.segments_skipped),
     renderMetric("Time saved", formatDuration(recent.seconds_saved)),
@@ -409,16 +410,42 @@ async function refreshStats() {
   const daily = document.querySelector("#daily-stats");
   if (!stats.daily.length) {
     daily.innerHTML = '<div class="empty-state">Daily activity will appear after the first skip.</div>';
-    return;
+  } else {
+    const maxSeconds = Math.max(1, ...stats.daily.flatMap((item) => [
+      Number(item.watched_seconds) || 0,
+      Number(item.seconds_saved) || 0,
+    ]));
+    daily.innerHTML = stats.daily.map((item) => {
+      const watched = Number(item.watched_seconds) || 0;
+      const skipped = Number(item.seconds_saved) || 0;
+      const watchedWidth = watched ? Math.max(2, watched / maxSeconds * 100) : 0;
+      const skippedWidth = skipped ? Math.max(2, skipped / maxSeconds * 100) : 0;
+      return `<div class="daily-row daily-comparison-row" title="${escapeHtml(item.day)}: ${escapeHtml(formatDuration(watched))} watched, ${escapeHtml(formatDuration(skipped))} skipped">
+        <time>${escapeHtml(item.day.slice(5))}</time>
+        <span class="daily-comparison-bars">
+          <span class="daily-bar-track"><progress class="daily-bar daily-watch-bar" value="${watchedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(watched))} watched"></progress></span>
+          <span class="daily-bar-track"><progress class="daily-bar daily-skip-bar" value="${skippedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(skipped))} skipped"></progress></span>
+        </span>
+        <strong>${escapeHtml(formatDuration(watched))} / ${escapeHtml(formatDuration(skipped))}</strong></div>`;
+    }).join("");
   }
-  const maxSeconds = Math.max(1, ...stats.daily.map((item) => Number(item.seconds_saved) || 0));
-  daily.innerHTML = stats.daily.map((item) => {
-    const seconds = Number(item.seconds_saved) || 0;
-    const width = Math.max(2, (seconds / maxSeconds) * 100);
-    return `<div class="daily-row" title="${escapeHtml(item.day)}: ${escapeHtml(formatDuration(seconds))} saved">
-      <time>${escapeHtml(item.day.slice(5))}</time><span class="daily-bar-track"><progress class="daily-bar" value="${Math.round(width)}" max="100" aria-label="${escapeHtml(formatDuration(seconds))} saved"></progress></span>
-      <strong>${escapeHtml(formatDuration(seconds))}</strong></div>`;
-  }).join("");
+
+  const topVideos = document.querySelector("#top-video-stats");
+  if (!stats.top_videos.length) {
+    topVideos.innerHTML = '<div class="empty-state">Watched-time rankings will appear as playback is recorded.</div>';
+  } else {
+    const maxWatched = Math.max(1, ...stats.top_videos.map((video) => Number(video.watched_seconds) || 0));
+    topVideos.innerHTML = stats.top_videos.map((video) => {
+      const seconds = Number(video.watched_seconds) || 0;
+      const width = Math.max(2, seconds / maxWatched * 100);
+      return `<div class="top-video-row">
+        <a href="https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(video.title || video.video_id)}</a>
+        <small>${escapeHtml(video.channel || video.device)}</small>
+        <span class="daily-bar-track"><progress class="daily-bar daily-watch-bar" value="${width.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(seconds))} watched"></progress></span>
+        <strong>${escapeHtml(formatDuration(seconds))}</strong>
+      </div>`;
+    }).join("");
+  }
 }
 
 function renderDiscovered(devices) {
@@ -632,6 +659,29 @@ document.querySelector("#load-more-history").addEventListener("click", () => {
 });
 document.querySelector("#clear-logs").addEventListener("click", () => {
   elements.logOutput.textContent = "Log view cleared. Service output will reappear on refresh.";
+});
+document.querySelector("#delete-logs").addEventListener("click", async () => {
+  if (!window.confirm("Permanently delete all saved service logs, including the rotated log file?")) return;
+  try {
+    await api("/api/logs", { method: "DELETE" });
+    await refreshLogs();
+    notify("Saved service logs deleted.");
+  } catch (error) {
+    notify(error.message, true);
+  }
+});
+document.querySelector("#delete-history").addEventListener("click", async () => {
+  if (!window.confirm("Permanently delete all video history and activity statistics? This cannot be undone.")) return;
+  try {
+    await api("/api/history", { method: "DELETE" });
+    historyOffset = 0;
+    elements.historyList.innerHTML = "";
+    await Promise.all([refreshStats(), refreshNowPlaying()]);
+    if (!document.querySelector("#history-tab").hidden) await refreshHistory();
+    notify("Video history and activity statistics deleted.");
+  } catch (error) {
+    notify(error.message, true);
+  }
 });
 
 document.querySelectorAll(".tab").forEach((tab) => {

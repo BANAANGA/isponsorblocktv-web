@@ -1,5 +1,5 @@
-import sqlite3
 import math
+import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -7,10 +7,16 @@ from typing import Any, Iterator
 
 
 class ActivityStore:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, max_history_videos: int = 1000) -> None:
+        if not 1 <= max_history_videos <= 10000:
+            raise ValueError("Video history limit must be between 1 and 10000")
         self.path = path
+        self.max_history_videos = max_history_videos
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
+            had_daily_watch_table = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'watch_time_daily'"
+            ).fetchone() is not None
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS video_history (
@@ -28,6 +34,10 @@ class ActivityStore:
                 );
                 CREATE INDEX IF NOT EXISTS video_history_started_at
                     ON video_history(started_at DESC);
+                CREATE TABLE IF NOT EXISTS watch_time_daily (
+                    day TEXT PRIMARY KEY,
+                    watched_seconds REAL NOT NULL DEFAULT 0
+                );
                 CREATE TABLE IF NOT EXISTS now_playing (
                     device TEXT PRIMARY KEY,
                     video_id TEXT NOT NULL,
@@ -64,6 +74,16 @@ class ActivityStore:
             if "watched_seconds" not in columns:
                 connection.execute(
                     "ALTER TABLE video_history ADD COLUMN watched_seconds REAL NOT NULL DEFAULT 0"
+                )
+            if not had_daily_watch_table:
+                connection.execute(
+                    """
+                    INSERT INTO watch_time_daily (day, watched_seconds)
+                    SELECT substr(started_at, 1, 10), SUM(watched_seconds)
+                    FROM video_history
+                    WHERE watched_seconds > 0
+                    GROUP BY substr(started_at, 1, 10)
+                    """
                 )
 
     def _connect(self) -> sqlite3.Connection:
@@ -126,27 +146,56 @@ class ActivityStore:
                         recent["id"],
                     ),
                 )
-                return
-            connection.execute(
-                """
-                INSERT INTO video_history (
-                    video_id, title, channel, channel_url, thumbnail_url, device,
-                    started_at, last_seen_at, segment_count
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO video_history (
+                        video_id, title, channel, channel_url, thumbnail_url, device,
+                        started_at, last_seen_at, segment_count
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        video_id,
+                        title,
+                        channel,
+                        channel_url,
+                        thumbnail_url,
+                        device,
+                        timestamp,
+                        timestamp,
+                        segment_count,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    video_id,
-                    title,
-                    channel,
-                    channel_url,
-                    thumbnail_url,
-                    device,
-                    timestamp,
-                    timestamp,
-                    segment_count,
-                ),
+            self._prune_history(connection)
+
+    def set_history_limit(self, max_history_videos: int) -> None:
+        if not 1 <= max_history_videos <= 10000:
+            raise ValueError("Video history limit must be between 1 and 10000")
+        self.max_history_videos = max_history_videos
+        with self._connection() as connection:
+            self._prune_history(connection)
+
+    def _prune_history(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            DELETE FROM video_history
+            WHERE id NOT IN (
+                SELECT id FROM video_history
+                ORDER BY started_at DESC, id DESC
+                LIMIT ?
             )
+            """,
+            (self.max_history_videos,),
+        )
+
+    def clear_history(self) -> None:
+        with self._connection() as connection:
+            connection.execute("DELETE FROM video_history")
+            connection.execute("DELETE FROM now_playing")
+            connection.execute("DELETE FROM skip_categories")
+            connection.execute("DELETE FROM skip_events")
+            connection.execute("DELETE FROM watch_time_daily")
 
     def update_video_metadata(
         self,
@@ -236,9 +285,17 @@ class ActivityStore:
                 (max(0, segment_count), video_id, device),
             )
 
-    def record_watch_time(self, video_id: str, device: str, seconds: float) -> None:
+    def record_watch_time(
+        self,
+        video_id: str,
+        device: str,
+        seconds: float,
+        *,
+        now: datetime | None = None,
+    ) -> None:
         if not math.isfinite(seconds) or seconds <= 0:
             return
+        day = (now or datetime.now(UTC)).date().isoformat()
         with self._connection() as connection:
             connection.execute(
                 """
@@ -251,6 +308,14 @@ class ActivityStore:
                 )
                 """,
                 (seconds, video_id, device),
+            )
+            connection.execute(
+                """
+                INSERT INTO watch_time_daily (day, watched_seconds) VALUES (?, ?)
+                ON CONFLICT(day) DO UPDATE SET
+                    watched_seconds = watched_seconds + excluded.watched_seconds
+                """,
+                (day, seconds),
             )
 
     def record_skip(
@@ -334,7 +399,7 @@ class ActivityStore:
             ).fetchone()
             video_count = connection.execute("SELECT COUNT(*) FROM video_history").fetchone()[0]
             watched_seconds = connection.execute(
-                "SELECT COALESCE(SUM(watched_seconds), 0) FROM video_history"
+                "SELECT COALESCE(SUM(watched_seconds), 0) FROM watch_time_daily"
             ).fetchone()[0]
             devices = connection.execute(
                 """
@@ -350,15 +415,6 @@ class ActivityStore:
                 FROM skip_categories GROUP BY category ORDER BY seconds_saved DESC
                 """
             ).fetchall()
-            daily = connection.execute(
-                """
-                SELECT substr(skipped_at, 1, 10) AS day, COUNT(*) AS skip_events,
-                    SUM(segment_count) AS segments_skipped, SUM(seconds_saved) AS seconds_saved
-                FROM skip_events WHERE skipped_at >= ?
-                GROUP BY day ORDER BY day
-                """,
-                (cutoff,),
-            ).fetchall()
             recent = connection.execute(
                 """
                 SELECT COUNT(*) AS skip_events, COALESCE(SUM(segment_count), 0) AS segments_skipped,
@@ -371,9 +427,36 @@ class ActivityStore:
                 "SELECT COUNT(*) FROM video_history WHERE started_at >= ?", (cutoff,)
             ).fetchone()[0]
             recent_watched_seconds = connection.execute(
-                "SELECT COALESCE(SUM(watched_seconds), 0) FROM video_history WHERE started_at >= ?",
-                (cutoff,),
+                "SELECT COALESCE(SUM(watched_seconds), 0) FROM watch_time_daily WHERE day >= ?",
+                (cutoff[:10],),
             ).fetchone()[0]
+            top_videos = connection.execute(
+                """
+                SELECT video_id, title, channel, device, watched_seconds, segment_count
+                FROM video_history
+                WHERE watched_seconds > 0
+                ORDER BY watched_seconds DESC, started_at DESC
+                LIMIT 10
+                """
+            ).fetchall()
+            daily = connection.execute(
+                """
+                WITH activity AS (
+                    SELECT day, watched_seconds, 0 AS seconds_saved, 0 AS skip_events
+                    FROM watch_time_daily WHERE day >= ?
+                    UNION ALL
+                    SELECT substr(skipped_at, 1, 10) AS day, 0 AS watched_seconds,
+                        SUM(seconds_saved) AS seconds_saved, COUNT(*) AS skip_events
+                    FROM skip_events WHERE skipped_at >= ? GROUP BY day
+                )
+                SELECT day, SUM(watched_seconds) AS watched_seconds,
+                    SUM(seconds_saved) AS seconds_saved, SUM(skip_events) AS skip_events
+                FROM activity
+                GROUP BY day
+                ORDER BY day
+                """,
+                (cutoff[:10], cutoff),
+            ).fetchall()
         return {
             "totals": {
                 "videos_watched": video_count,
@@ -393,4 +476,5 @@ class ActivityStore:
             "by_category": [dict(row) for row in categories],
             "by_device": [dict(row) for row in devices],
             "daily": [dict(row) for row in daily],
+            "top_videos": [dict(row) for row in top_videos],
         }

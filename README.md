@@ -143,12 +143,17 @@ saved logs.
   YouTube channel whitelist and API key, proxy setting, and SponsorBlock API
   URL, plus upstream debug logging and HTTP tracing switches.
 - Start/stop controls and a live-refreshing log viewer for the upstream
-  service, with log persistence and rotation.
+  service, with log persistence, rotation, and a control to permanently delete
+  saved logs.
 - Video history with direct YouTube links and statistics for watched videos,
   thumbnails, public video titles and channel names, skipped segments by
   category and device, skip events, and estimated time saved overall and over
   the last 30 days. The Dashboard tab is the first page shown after sign-in and
-  includes a current playback widget and daily and category graphs.
+  includes a current playback widget, watched-versus-skipped and category pie
+  charts, daily time comparisons, and a most-watched videos graph.
+- Configure the maximum number of retained video-history entries (100 to
+  10,000); oldest entries are automatically removed. Delete viewing history
+  and its related activity statistics from the Settings tab when needed.
 - Dashboard time comparison estimates watched time from forward playback
   position changes and compares it with SponsorBlock skip durations. Older
   playback sessions are not backfilled.

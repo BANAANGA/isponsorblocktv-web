@@ -2,6 +2,7 @@ import asyncio
 import copy
 import logging
 import math
+import os
 import sys
 import time
 from urllib.parse import quote
@@ -196,7 +197,14 @@ def main() -> None:
         if argument == "--data":
             data_dir = Path(sys.argv[index + 1])
             break
-    install_activity_hooks(ActivityStore(data_dir / "activity.sqlite3"))
+    try:
+        history_limit = int(os.environ.get("ISPBTV_MAX_HISTORY_VIDEOS", "1000"))
+    except ValueError:
+        logging.exception("Invalid ISPBTV_MAX_HISTORY_VIDEOS; using default")
+        history_limit = 1000
+    install_activity_hooks(
+        ActivityStore(data_dir / "activity.sqlite3", max_history_videos=history_limit)
+    )
     app_start()
 
 

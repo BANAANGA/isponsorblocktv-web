@@ -122,6 +122,25 @@
             </div>
 
             <div class="card advanced-card">
+              <div class="card-heading"><div><h2>Data management</h2><p>Choose how much video history to retain or clear stored activity data.</p></div></div>
+              <div class="field-grid">
+                <label>Maximum video history entries
+                  <select name="max_history_videos">
+                    <option value="100">100 videos</option>
+                    <option value="500">500 videos</option>
+                    <option value="1000">1,000 videos</option>
+                    <option value="5000">5,000 videos</option>
+                    <option value="10000">10,000 videos</option>
+                  </select>
+                </label>
+                <p class="data-retention-note">Oldest video entries are removed automatically when the limit is exceeded. Aggregate skip and watched-time statistics are retained.</p>
+              </div>
+              <div class="data-actions">
+                <button id="delete-history" class="button button-danger" type="button">Delete viewing history &amp; stats</button>
+              </div>
+            </div>
+
+            <div class="card advanced-card">
               <div class="card-heading"><div><h2>Advanced options</h2><p>Optional networking and diagnostic controls for the upstream service.</p></div></div>
               <div class="field-grid">
                 <label><input name="use_proxy" type="checkbox"> Route service requests through the system proxy</label>
@@ -200,8 +219,13 @@
                 <div id="device-stats" class="stats-list"></div>
               </div>
               <div class="card">
-                <div class="card-heading"><div><h2>Daily activity</h2><p>Time saved per day over the last 30 days.</p></div></div>
+                <div class="card-heading"><div><h2>Daily watch and skip time</h2><p>Estimated watched and skipped time per day over the last 30 days.</p></div></div>
+                <div class="daily-legend"><span><i class="daily-watch-key"></i>Watched</span><span><i class="daily-skip-key"></i>Skipped</span></div>
                 <div id="daily-stats" class="daily-chart"></div>
+              </div>
+              <div class="card">
+                <div class="card-heading"><div><h2>Most-watched videos</h2><p>Your top 10 retained videos by estimated playback time.</p></div></div>
+                <div id="top-video-stats" class="top-video-chart"></div>
               </div>
             </div>
           </div>
@@ -215,6 +239,7 @@
                 <label class="toggle-label"><input id="auto-refresh" type="checkbox" checked> Auto-refresh</label>
                 <button id="refresh-logs" class="button button-secondary" type="button">Refresh</button>
                 <button id="clear-logs" class="button button-quiet" type="button">Clear view</button>
+                <button id="delete-logs" class="button button-danger" type="button">Delete logs</button>
               </div>
             </div>
             <div id="log-output" class="log-output" role="log" aria-live="polite">Loading logs...</div>
@@ -223,6 +248,6 @@
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=watched-time-pie" defer></script>
+    <script src="/static/app.js?v=history-retention-more-stats" defer></script>
   </body>
 </html>

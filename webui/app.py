@@ -52,7 +52,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "use_proxy": False,
     "sponsorblock_api_url": "https://sponsor.ajay.app/api/",
 }
-DEFAULT_RUNTIME_OPTIONS: dict[str, bool] = {"debug": False, "http_tracing": False}
+DEFAULT_RUNTIME_OPTIONS: dict[str, Any] = {
+    "debug": False,
+    "http_tracing": False,
+    "max_history_videos": 1000,
+}
 
 
 class DeviceConfig(BaseModel):
@@ -89,6 +93,7 @@ class Settings(BaseModel):
     use_proxy: bool = False
     debug: bool = False
     http_tracing: bool = False
+    max_history_videos: int = Field(default=1000, ge=100, le=10000)
     sponsorblock_api_url: str = Field(
         default="https://sponsor.ajay.app/api/", min_length=1, max_length=2048
     )
@@ -174,6 +179,11 @@ class ServiceManager:
         except OSError:
             logger.exception("Could not persist service log output")
 
+    def clear_logs(self) -> None:
+        self.log_lines.clear()
+        for path in (self.log_path, self.log_path.with_suffix(".log.1")):
+            path.unlink(missing_ok=True)
+
     async def start(self) -> None:
         async with self.lock:
             if self.process and self.process.returncode is None:
@@ -198,7 +208,12 @@ class ServiceManager:
                 *command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1", "TERM": "dumb"},
+                env={
+                    **os.environ,
+                    "PYTHONUNBUFFERED": "1",
+                    "TERM": "dumb",
+                    "ISPBTV_MAX_HISTORY_VIDEOS": str(options["max_history_videos"]),
+                },
             )
             self.started_at = time.time()
             self.reader_task = asyncio.create_task(self._read_output(self.process))
@@ -269,7 +284,7 @@ def load_config() -> dict[str, Any]:
     return {**DEFAULT_CONFIG, **stored}
 
 
-def load_runtime_options() -> dict[str, bool]:
+def load_runtime_options() -> dict[str, Any]:
     path = DATA_DIR / "webui-settings.json"
     if not path.exists():
         return DEFAULT_RUNTIME_OPTIONS.copy()
@@ -297,11 +312,19 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def save_config(settings: Settings) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _write_json(DATA_DIR / "config.json", settings.model_dump(exclude={"debug", "http_tracing"}))
+    _write_json(
+        DATA_DIR / "config.json",
+        settings.model_dump(exclude={"debug", "http_tracing", "max_history_videos"}),
+    )
     _write_json(
         DATA_DIR / "webui-settings.json",
-        {"debug": settings.debug, "http_tracing": settings.http_tracing},
+        {
+            "debug": settings.debug,
+            "http_tracing": settings.http_tracing,
+            "max_history_videos": settings.max_history_videos,
+        },
     )
+    activity_store.set_history_limit(settings.max_history_videos)
 
 
 async def require_auth(request: Request) -> None:
@@ -321,6 +344,7 @@ async def lifespan(_: FastAPI):
     if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         raise RuntimeError("Set WEB_USERNAME and WEB_PASSWORD before starting the web interface")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    activity_store.set_history_limit(load_runtime_options()["max_history_videos"])
     if load_config()["devices"]:
         try:
             await service.start()
@@ -454,6 +478,16 @@ async def get_logs(limit: int = 500) -> dict[str, Any]:
     return {"lines": list(service.log_lines)[-limit:], "status": service.status()}
 
 
+@app.delete("/api/logs", dependencies=[Depends(require_csrf)])
+async def delete_logs() -> dict[str, bool]:
+    try:
+        service.clear_logs()
+    except OSError as error:
+        logger.exception("Could not delete service logs")
+        raise HTTPException(status_code=500, detail="Could not delete service logs") from error
+    return {"success": True}
+
+
 @app.get("/api/history", dependencies=[Depends(require_auth)])
 async def get_video_history(limit: int = 100, offset: int = 0, search: str = "") -> dict[str, Any]:
     if not 1 <= limit <= 500 or offset < 0:
@@ -461,6 +495,16 @@ async def get_video_history(limit: int = 100, offset: int = 0, search: str = "")
     if len(search) > 200:
         raise HTTPException(status_code=422, detail="Search must be 200 characters or fewer")
     return activity_store.history(limit, offset, search)
+
+
+@app.delete("/api/history", dependencies=[Depends(require_csrf)])
+async def delete_video_history() -> dict[str, bool]:
+    try:
+        activity_store.clear_history()
+    except OSError as error:
+        logger.exception("Could not delete video history")
+        raise HTTPException(status_code=500, detail="Could not delete video history") from error
+    return {"success": True}
 
 
 @app.get("/api/stats", dependencies=[Depends(require_auth)])
