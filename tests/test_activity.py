@@ -39,6 +39,49 @@ class ActivityStoreTests(unittest.TestCase):
 
         self.assertEqual(self.store.history()["total"], 2)
 
+    def test_history_limit_prunes_oldest_sessions_and_can_be_reduced(self) -> None:
+        start = datetime(2026, 10, 16, 12, tzinfo=UTC)
+        self.store.set_history_limit(2)
+        for index in range(3):
+            timestamp = start + timedelta(minutes=index * 11)
+            self.store.record_video(
+                f"video-{index}", f"Video {index}", "Living room", 0, now=timestamp
+            )
+            self.store.record_watch_time(
+                f"video-{index}", "Living room", 10, now=timestamp
+            )
+
+        self.assertEqual(
+            [video["video_id"] for video in self.store.history(limit=10)["items"]],
+            ["video-2", "video-1"],
+        )
+        self.assertEqual(self.store.stats()["totals"]["watched_seconds"], 30)
+
+        self.store.set_history_limit(1)
+        self.assertEqual(self.store.history()["total"], 1)
+
+    def test_clear_history_removes_video_and_activity_records(self) -> None:
+        now = datetime.now(UTC)
+        self.store.record_video("video-1", "Video", "Living room", 1, now=now)
+        self.store.record_watch_time("video-1", "Living room", 60, now=now)
+        self.store.record_skip(
+            "video-1",
+            "Living room",
+            10,
+            1,
+            {"sponsor": 1},
+            {"sponsor": 10},
+            now=now,
+        )
+        self.store.set_now_playing("video-1", "Living room", playing=True, now=now)
+
+        self.store.clear_history()
+
+        self.assertEqual(self.store.history()["total"], 0)
+        self.assertEqual(self.store.stats()["totals"]["skip_events"], 0)
+        self.assertEqual(self.store.stats()["totals"]["watched_seconds"], 0)
+        self.assertEqual(self.store.now_playing(), [])
+
     def test_history_search_filters_video_metadata_and_escapes_wildcards(self) -> None:
         self.store.record_video("video-1", "Red triangle", "Example channel", 1)
         self.store.record_video("video-2", "100% complete", "Other channel", 1)
@@ -78,6 +121,9 @@ class ActivityStoreTests(unittest.TestCase):
         )
         self.assertEqual(stats["by_device"][0]["device"], "Living room")
         self.assertEqual(len(stats["daily"]), 1)
+        self.assertEqual(stats["daily"][0]["watched_seconds"], 120)
+        self.assertEqual(stats["daily"][0]["seconds_saved"], 30)
+        self.assertEqual(stats["top_videos"][0]["video_id"], "video-1")
 
     def test_activity_persists_across_store_instances(self) -> None:
         self.store.record_video("video-1", "Video", "Living room", 1)
@@ -157,6 +203,40 @@ class ActivityStoreTests(unittest.TestCase):
         with sqlite3.connect(legacy_path) as connection:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(video_history)")}
         self.assertIn("watched_seconds", columns)
+
+    def test_activity_migration_backfills_daily_watch_totals(self) -> None:
+        legacy_path = Path(self.temporary_directory.name) / "watched.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE video_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    video_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    channel TEXT NOT NULL DEFAULT '',
+                    channel_url TEXT NOT NULL DEFAULT '',
+                    thumbnail_url TEXT NOT NULL DEFAULT '',
+                    device TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    segment_count INTEGER NOT NULL DEFAULT 0,
+                    watched_seconds REAL NOT NULL DEFAULT 0
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO video_history
+                    (video_id, title, device, started_at, last_seen_at, watched_seconds)
+                VALUES ('video-1', 'Video', 'Living room',
+                    '2026-10-15T12:00:00+00:00', '2026-10-15T12:00:00+00:00', 45)
+                """
+            )
+
+        migrated = ActivityStore(legacy_path)
+
+        self.assertEqual(migrated.stats()["totals"]["watched_seconds"], 45)
+        self.assertEqual(migrated.stats()["daily"][0]["watched_seconds"], 45)
 
 
 class SegmentIntervalTests(unittest.TestCase):
