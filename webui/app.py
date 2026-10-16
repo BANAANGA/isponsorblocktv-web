@@ -56,6 +56,7 @@ DEFAULT_RUNTIME_OPTIONS: dict[str, Any] = {
     "debug": False,
     "http_tracing": False,
     "max_history_videos": 1000,
+    "record_video_history": True,
 }
 
 
@@ -94,6 +95,7 @@ class Settings(BaseModel):
     debug: bool = False
     http_tracing: bool = False
     max_history_videos: int = Field(default=1000, ge=100, le=10000)
+    record_video_history: bool = True
     sponsorblock_api_url: str = Field(
         default="https://sponsor.ajay.app/api/", min_length=1, max_length=2048
     )
@@ -213,6 +215,7 @@ class ServiceManager:
                     "PYTHONUNBUFFERED": "1",
                     "TERM": "dumb",
                     "ISPBTV_MAX_HISTORY_VIDEOS": str(options["max_history_videos"]),
+                    "ISPBTV_RECORD_VIDEO_HISTORY": str(options["record_video_history"]).lower(),
                 },
             )
             self.started_at = time.time()
@@ -314,7 +317,9 @@ def save_config(settings: Settings) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     _write_json(
         DATA_DIR / "config.json",
-        settings.model_dump(exclude={"debug", "http_tracing", "max_history_videos"}),
+        settings.model_dump(
+            exclude={"debug", "http_tracing", "max_history_videos", "record_video_history"}
+        ),
     )
     _write_json(
         DATA_DIR / "webui-settings.json",
@@ -322,6 +327,7 @@ def save_config(settings: Settings) -> None:
             "debug": settings.debug,
             "http_tracing": settings.http_tracing,
             "max_history_videos": settings.max_history_videos,
+            "record_video_history": settings.record_video_history,
         },
     )
     activity_store.set_history_limit(settings.max_history_videos)
@@ -468,6 +474,12 @@ async def start_service() -> dict[str, Any]:
 @app.post("/api/service/stop", dependencies=[Depends(require_csrf)])
 async def stop_service() -> dict[str, Any]:
     await service.stop()
+    return service.status()
+
+
+@app.post("/api/service/restart", dependencies=[Depends(require_csrf)])
+async def restart_service() -> dict[str, Any]:
+    await service.restart()
     return service.status()
 
 

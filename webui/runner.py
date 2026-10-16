@@ -133,16 +133,17 @@ def install_activity_hooks(store: ActivityStore) -> None:
         store.set_now_playing(video_id, self.name, playing=is_playing)
         if video_id and is_playing:
             self._webui_current_video_id = video_id
-            self.api_helper._webui_listeners = getattr(
-                self.api_helper, "_webui_listeners", set()
-            )
-            self.api_helper._webui_listeners.add(self)
-            store.record_video(video_id, video_id, self.name, 0)
-            if getattr(self, "_webui_metadata_video_id", None) != video_id:
-                self._webui_metadata_video_id = video_id
-                self._webui_metadata_task = asyncio.create_task(
-                    update_video_metadata(self, video_id)
+            if store.record_video_history:
+                self.api_helper._webui_listeners = getattr(
+                    self.api_helper, "_webui_listeners", set()
                 )
+                self.api_helper._webui_listeners.add(self)
+                store.record_video(video_id, video_id, self.name, 0)
+                if getattr(self, "_webui_metadata_video_id", None) != video_id:
+                    self._webui_metadata_video_id = video_id
+                    self._webui_metadata_task = asyncio.create_task(
+                        update_video_metadata(self, video_id)
+                    )
         return await original_process_playstatus(self, state, time_start)
 
     upstream_main.DeviceListener.process_playstatus = process_playstatus
@@ -202,8 +203,13 @@ def main() -> None:
     except ValueError:
         logging.exception("Invalid ISPBTV_MAX_HISTORY_VIDEOS; using default")
         history_limit = 1000
+    record_video_history = os.environ.get("ISPBTV_RECORD_VIDEO_HISTORY", "true").lower() == "true"
     install_activity_hooks(
-        ActivityStore(data_dir / "activity.sqlite3", max_history_videos=history_limit)
+        ActivityStore(
+            data_dir / "activity.sqlite3",
+            max_history_videos=history_limit,
+            record_video_history=record_video_history,
+        )
     )
     app_start()
 

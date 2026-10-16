@@ -60,6 +60,61 @@ class ActivityStoreTests(unittest.TestCase):
         self.store.set_history_limit(1)
         self.assertEqual(self.store.history()["total"], 1)
 
+    def test_disabling_video_history_keeps_aggregate_activity(self) -> None:
+        store = ActivityStore(
+            Path(self.temporary_directory.name) / "no-video-history.sqlite3",
+            record_video_history=False,
+        )
+        now = datetime(2026, 10, 12, 8, 30, tzinfo=UTC)
+        store.record_video("video-1", "Video", "Living room", 0, now=now)
+        store.record_watch_time("video-1", "Living room", 90, now=now)
+        store.record_skip(
+            "video-1",
+            "Living room",
+            30,
+            1,
+            {"sponsor": 1},
+            {"sponsor": 30},
+            now=now,
+        )
+
+        stats = store.stats()
+
+        self.assertEqual(store.history()["total"], 0)
+        self.assertEqual(stats["totals"]["watched_seconds"], 90)
+        self.assertEqual(stats["totals"]["skip_events"], 1)
+        self.assertEqual(stats["by_hour"][8]["watched_seconds"], 90)
+        self.assertEqual(stats["by_hour"][8]["seconds_saved"], 30)
+        self.assertEqual(stats["by_weekday"][0]["watched_seconds"], 90)
+        self.assertEqual(stats["by_weekday"][0]["seconds_saved"], 30)
+        with store._connection() as connection:
+            self.assertEqual(connection.execute("SELECT video_id FROM skip_events").fetchone()[0], "")
+
+    def test_activity_time_breakdowns_use_utc_hour_and_monday_first_weekdays(self) -> None:
+        monday = datetime(2026, 10, 12, 8, 15, tzinfo=UTC)
+        tuesday = datetime(2026, 10, 13, 19, 15, tzinfo=UTC)
+        self.store.record_watch_time("video-1", "Living room", 120, now=monday)
+        self.store.record_watch_time("video-2", "Living room", 60, now=tuesday)
+        self.store.record_skip(
+            "video-1", "Living room", 45, 1, {"sponsor": 1}, {"sponsor": 45}, now=monday
+        )
+        self.store.record_skip(
+            "video-2", "Living room", 90, 1, {"intro": 1}, {"intro": 90}, now=tuesday
+        )
+
+        stats = self.store.stats()
+
+        self.assertEqual(len(stats["by_hour"]), 24)
+        self.assertEqual(len(stats["by_weekday"]), 7)
+        self.assertEqual(stats["by_hour"][8]["watched_seconds"], 120)
+        self.assertEqual(stats["by_hour"][8]["seconds_saved"], 45)
+        self.assertEqual(stats["by_hour"][19]["watched_seconds"], 60)
+        self.assertEqual(stats["by_hour"][19]["seconds_saved"], 90)
+        self.assertEqual(stats["by_weekday"][0]["watched_seconds"], 120)
+        self.assertEqual(stats["by_weekday"][0]["seconds_saved"], 45)
+        self.assertEqual(stats["by_weekday"][1]["watched_seconds"], 60)
+        self.assertEqual(stats["by_weekday"][1]["seconds_saved"], 90)
+
     def test_clear_history_removes_video_and_activity_records(self) -> None:
         now = datetime.now(UTC)
         self.store.record_video("video-1", "Video", "Living room", 1, now=now)

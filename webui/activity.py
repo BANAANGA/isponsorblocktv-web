@@ -7,11 +7,17 @@ from typing import Any, Iterator
 
 
 class ActivityStore:
-    def __init__(self, path: Path, max_history_videos: int = 1000) -> None:
+    def __init__(
+        self,
+        path: Path,
+        max_history_videos: int = 1000,
+        record_video_history: bool = True,
+    ) -> None:
         if not 1 <= max_history_videos <= 10000:
             raise ValueError("Video history limit must be between 1 and 10000")
         self.path = path
         self.max_history_videos = max_history_videos
+        self.record_video_history = record_video_history
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
             had_daily_watch_table = connection.execute(
@@ -36,6 +42,14 @@ class ActivityStore:
                     ON video_history(started_at DESC);
                 CREATE TABLE IF NOT EXISTS watch_time_daily (
                     day TEXT PRIMARY KEY,
+                    watched_seconds REAL NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS watch_time_by_hour (
+                    hour INTEGER PRIMARY KEY CHECK (hour BETWEEN 0 AND 23),
+                    watched_seconds REAL NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS watch_time_by_weekday (
+                    weekday INTEGER PRIMARY KEY CHECK (weekday BETWEEN 0 AND 6),
                     watched_seconds REAL NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS now_playing (
@@ -114,6 +128,8 @@ class ActivityStore:
         *,
         now: datetime | None = None,
     ) -> None:
+        if not self.record_video_history:
+            return
         timestamp = (now or datetime.now(UTC)).isoformat()
         with self._connection() as connection:
             recent = connection.execute(
@@ -196,6 +212,8 @@ class ActivityStore:
             connection.execute("DELETE FROM skip_categories")
             connection.execute("DELETE FROM skip_events")
             connection.execute("DELETE FROM watch_time_daily")
+            connection.execute("DELETE FROM watch_time_by_hour")
+            connection.execute("DELETE FROM watch_time_by_weekday")
 
     def update_video_metadata(
         self,
@@ -295,20 +313,25 @@ class ActivityStore:
     ) -> None:
         if not math.isfinite(seconds) or seconds <= 0:
             return
-        day = (now or datetime.now(UTC)).date().isoformat()
+        timestamp = now or datetime.now(UTC)
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        timestamp = timestamp.astimezone(UTC)
+        day = timestamp.date().isoformat()
         with self._connection() as connection:
-            connection.execute(
-                """
-                UPDATE video_history
-                SET watched_seconds = watched_seconds + ?
-                WHERE id = (
-                    SELECT id FROM video_history
-                    WHERE video_id = ? AND device = ?
-                    ORDER BY started_at DESC LIMIT 1
+            if self.record_video_history:
+                connection.execute(
+                    """
+                    UPDATE video_history
+                    SET watched_seconds = watched_seconds + ?
+                    WHERE id = (
+                        SELECT id FROM video_history
+                        WHERE video_id = ? AND device = ?
+                        ORDER BY started_at DESC LIMIT 1
+                    )
+                    """,
+                    (seconds, video_id, device),
                 )
-                """,
-                (seconds, video_id, device),
-            )
             connection.execute(
                 """
                 INSERT INTO watch_time_daily (day, watched_seconds) VALUES (?, ?)
@@ -316,6 +339,22 @@ class ActivityStore:
                     watched_seconds = watched_seconds + excluded.watched_seconds
                 """,
                 (day, seconds),
+            )
+            connection.execute(
+                """
+                INSERT INTO watch_time_by_hour (hour, watched_seconds) VALUES (?, ?)
+                ON CONFLICT(hour) DO UPDATE SET
+                    watched_seconds = watched_seconds + excluded.watched_seconds
+                """,
+                (timestamp.hour, seconds),
+            )
+            connection.execute(
+                """
+                INSERT INTO watch_time_by_weekday (weekday, watched_seconds) VALUES (?, ?)
+                ON CONFLICT(weekday) DO UPDATE SET
+                    watched_seconds = watched_seconds + excluded.watched_seconds
+                """,
+                (timestamp.weekday(), seconds),
             )
 
     def record_skip(
@@ -336,7 +375,13 @@ class ActivityStore:
                 INSERT INTO skip_events (video_id, device, skipped_at, seconds_saved, segment_count)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (video_id, device, timestamp, max(0.0, seconds_saved), max(0, segment_count)),
+                (
+                    video_id if self.record_video_history else "",
+                    device,
+                    timestamp,
+                    max(0.0, seconds_saved),
+                    max(0, segment_count),
+                ),
             )
             connection.executemany(
                 """
@@ -457,6 +502,38 @@ class ActivityStore:
                 """,
                 (cutoff[:10], cutoff),
             ).fetchall()
+            watched_by_hour = {
+                row["hour"]: row["watched_seconds"]
+                for row in connection.execute(
+                    "SELECT hour, watched_seconds FROM watch_time_by_hour"
+                ).fetchall()
+            }
+            skipped_by_hour = {
+                row["hour"]: row["seconds_saved"]
+                for row in connection.execute(
+                    """
+                    SELECT CAST(strftime('%H', skipped_at) AS INTEGER) AS hour,
+                        SUM(seconds_saved) AS seconds_saved
+                    FROM skip_events GROUP BY hour
+                    """
+                ).fetchall()
+            }
+            watched_by_weekday = {
+                row["weekday"]: row["watched_seconds"]
+                for row in connection.execute(
+                    "SELECT weekday, watched_seconds FROM watch_time_by_weekday"
+                ).fetchall()
+            }
+            skipped_by_weekday = {
+                row["weekday"]: row["seconds_saved"]
+                for row in connection.execute(
+                    """
+                    SELECT (CAST(strftime('%w', skipped_at) AS INTEGER) + 6) % 7 AS weekday,
+                        SUM(seconds_saved) AS seconds_saved
+                    FROM skip_events GROUP BY weekday
+                    """
+                ).fetchall()
+            }
         return {
             "totals": {
                 "videos_watched": video_count,
@@ -477,4 +554,20 @@ class ActivityStore:
             "by_device": [dict(row) for row in devices],
             "daily": [dict(row) for row in daily],
             "top_videos": [dict(row) for row in top_videos],
+            "by_hour": [
+                {
+                    "hour": hour,
+                    "watched_seconds": round(watched_by_hour.get(hour, 0), 1),
+                    "seconds_saved": round(skipped_by_hour.get(hour, 0), 1),
+                }
+                for hour in range(24)
+            ],
+            "by_weekday": [
+                {
+                    "weekday": weekday,
+                    "watched_seconds": round(watched_by_weekday.get(weekday, 0), 1),
+                    "seconds_saved": round(skipped_by_weekday.get(weekday, 0), 1),
+                }
+                for weekday in range(7)
+            ],
         }
