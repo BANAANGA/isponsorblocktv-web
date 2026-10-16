@@ -17,6 +17,8 @@
         </a>
         <div id="header-actions" class="header-actions" hidden>
           <span id="service-indicator" class="status-pill">Checking service</span>
+          <button id="start-button" class="button button-primary" type="button">Start service</button>
+          <button id="stop-button" class="button button-quiet" type="button">Stop service</button>
           <button id="restart-button" class="button button-quiet" type="button" disabled>Restart service</button>
           <button id="logout-button" class="button button-quiet" type="button">Sign out</button>
         </div>
@@ -35,18 +37,6 @@
       </section>
 
       <section id="app-panel" hidden>
-        <div class="page-heading">
-          <div>
-            <div class="eyebrow">YOUR INSTANCE</div>
-            <h1>Management</h1>
-            <p>Configure devices, control the service, and inspect its live output.</p>
-          </div>
-          <div class="service-actions">
-            <button id="start-button" class="button button-primary" type="button">Start service</button>
-            <button id="stop-button" class="button button-quiet" type="button">Stop service</button>
-          </div>
-        </div>
-
         <nav class="tabs" aria-label="Management sections">
           <button class="tab active" data-tab="dashboard" type="button">Dashboard</button>
           <button class="tab" data-tab="history" type="button">Video history</button>
@@ -126,6 +116,15 @@
               <div class="card-heading"><div><h2>Data management</h2><p>Choose how much video history to retain or clear stored activity data.</p></div></div>
               <div class="field-grid">
                 <label><input name="record_video_history" type="checkbox"> Record video history</label>
+                <label>Display time zone
+                  <select name="timezone" id="timezone-select"></select>
+                </label>
+                <label>Time format
+                  <select name="time_format">
+                    <option value="12">12-hour</option>
+                    <option value="24">24-hour</option>
+                  </select>
+                </label>
                 <label>Maximum video history entries
                   <select name="max_history_videos">
                     <option value="100">100 videos</option>
@@ -135,7 +134,7 @@
                     <option value="10000">10,000 videos</option>
                   </select>
                 </label>
-                <p class="data-retention-note">Turn off video-history recording to stop saving new per-video entries and video IDs with skip events. Aggregate statistics and current playback continue. Existing history is kept until deleted. Oldest entries are removed automatically when the limit is exceeded.</p>
+                <p class="data-retention-note">Choose the time zone used for activity-by-hour and weekday statistics and history timestamps. Watched-time breakdowns begin collecting with this version. Turn off video-history recording to stop saving new per-video entries and video IDs with skip events. Aggregate statistics and current playback continue. Existing history is kept until deleted. Oldest entries are removed automatically when the limit is exceeded.</p>
               </div>
               <div class="data-actions">
                 <button id="delete-history" class="button button-danger" type="button">Delete viewing history &amp; stats</button>
@@ -226,12 +225,12 @@
                 <div id="daily-stats" class="daily-chart"></div>
               </div>
               <div class="card">
-                <div class="card-heading"><div><h2>Activity by hour</h2><p>Watched and skipped minutes for each hour of the day (UTC).</p></div></div>
+                <div class="card-heading"><div><h2>Activity by hour</h2><p>Watched and skipped minutes for each hour in your selected time zone.</p></div></div>
                 <div id="hourly-summary" class="activity-pattern-summary"></div>
                 <div id="hourly-stats" class="activity-pattern-chart"></div>
               </div>
               <div class="card">
-                <div class="card-heading"><div><h2>Activity by weekday</h2><p>Watched and skipped minutes for each day of the week (UTC).</p></div></div>
+                <div class="card-heading"><div><h2>Activity by weekday</h2><p>Watched and skipped minutes for each day in your selected time zone.</p></div></div>
                 <div id="weekday-summary" class="activity-pattern-summary"></div>
                 <div id="weekday-stats" class="activity-pattern-chart"></div>
               </div>

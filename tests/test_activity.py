@@ -144,6 +144,29 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertEqual(stats["by_weekday"][1]["watched_seconds"], 60)
         self.assertEqual(stats["by_weekday"][1]["seconds_saved"], 90)
 
+    def test_activity_time_breakdowns_follow_selected_timezone(self) -> None:
+        monday = datetime(2026, 10, 12, 3, 30, tzinfo=UTC)
+        self.store.record_watch_time("video-1", "Living room", 120, now=monday)
+        self.store.record_skip(
+            "video-1",
+            "Living room",
+            45,
+            1,
+            {"sponsor": 1},
+            {"sponsor": 45},
+            now=monday,
+        )
+
+        amsterdam_stats = self.store.stats("Europe/Amsterdam")
+        los_angeles_stats = self.store.stats("America/Los_Angeles")
+
+        self.assertEqual(amsterdam_stats["by_hour"][5]["watched_seconds"], 120)
+        self.assertEqual(amsterdam_stats["by_hour"][5]["seconds_saved"], 45)
+        self.assertEqual(amsterdam_stats["by_weekday"][0]["watched_seconds"], 120)
+        self.assertEqual(los_angeles_stats["by_hour"][20]["watched_seconds"], 120)
+        self.assertEqual(los_angeles_stats["by_hour"][20]["seconds_saved"], 45)
+        self.assertEqual(los_angeles_stats["by_weekday"][6]["watched_seconds"], 120)
+
     def test_clear_history_removes_video_and_activity_records(self) -> None:
         now = datetime.now(UTC)
         self.store.record_video("video-1", "Video", "Living room", 1, now=now)
