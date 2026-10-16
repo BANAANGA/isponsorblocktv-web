@@ -145,6 +145,7 @@ function collectSettings() {
     debug: form.elements.debug.checked,
     http_tracing: form.elements.http_tracing.checked,
     max_history_videos: Number(form.elements.max_history_videos.value),
+    record_video_history: form.elements.record_video_history.checked,
     sponsorblock_api_url: form.elements.sponsorblock_api_url.value.trim(),
   };
 }
@@ -172,8 +173,11 @@ async function refreshService() {
     elements.indicator.classList.toggle("stopped", !status.running);
     document.querySelector("#start-button").disabled = status.running;
     document.querySelector("#stop-button").disabled = !status.running;
+    document.querySelector("#restart-button").disabled = !status.running;
   } catch {
     elements.indicator.textContent = "Service unavailable";
+    elements.indicator.classList.remove("running", "stopped");
+    document.querySelector("#restart-button").disabled = true;
   }
 }
 
@@ -446,6 +450,49 @@ async function refreshStats() {
       </div>`;
     }).join("");
   }
+
+  const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const renderActivityPattern = (items, key) => {
+    const maxSeconds = Math.max(1, ...items.flatMap((item) => [
+      Number(item.watched_seconds) || 0,
+      Number(item.seconds_saved) || 0,
+    ]));
+    const watchedTotal = items.reduce((sum, item) => sum + (Number(item.watched_seconds) || 0), 0);
+    const skippedTotal = items.reduce((sum, item) => sum + (Number(item.seconds_saved) || 0), 0);
+    const peak = (field) => items.reduce((best, item) =>
+      Number(item[field]) > Number(best[field]) ? item : best, items[0]);
+    const peakWatched = peak("watched_seconds");
+    const peakSkipped = peak("seconds_saved");
+    const describe = (item, field, period) => {
+      const name = key === "hour"
+        ? `${String(item.hour).padStart(2, "0")}:00`
+        : weekdays[item.weekday];
+      return Number(item[field]) > 0 ? `${name} (${formatDuration(item[field])})` : `No ${period} time recorded`;
+    };
+    const summary = document.querySelector(`#${key === "hour" ? "hourly" : "weekday"}-summary`);
+    summary.textContent = watchedTotal || skippedTotal
+      ? `Most watched: ${describe(peakWatched, "watched_seconds", "watched")} · Most skipped: ${describe(peakSkipped, "seconds_saved", "skipped")}`
+      : `No watched or skipped activity recorded for this breakdown yet.`;
+    const container = document.querySelector(`#${key === "hour" ? "hourly" : "weekday"}-stats`);
+    container.innerHTML = items.map((item) => {
+      const watched = Number(item.watched_seconds) || 0;
+      const skipped = Number(item.seconds_saved) || 0;
+      const watchedWidth = watched ? Math.max(1, watched / maxSeconds * 100) : 0;
+      const skippedWidth = skipped ? Math.max(1, skipped / maxSeconds * 100) : 0;
+      const name = key === "hour"
+        ? `${String(item.hour).padStart(2, "0")}:00`
+        : weekdays[item.weekday];
+      return `<div class="activity-pattern-row" title="${escapeHtml(name)}: ${escapeHtml(formatDuration(watched))} watched, ${escapeHtml(formatDuration(skipped))} skipped">
+        <span>${escapeHtml(name)}</span>
+        <span class="activity-pattern-bars">
+          <span class="daily-bar-track"><progress class="daily-bar daily-watch-bar" value="${watchedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(watched))} watched"></progress></span>
+          <span class="daily-bar-track"><progress class="daily-bar daily-skip-bar" value="${skippedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(skipped))} skipped"></progress></span>
+        </span>
+        <strong>${escapeHtml(formatDuration(watched))} / ${escapeHtml(formatDuration(skipped))}</strong></div>`;
+    }).join("");
+  };
+  renderActivityPattern(stats.by_hour, "hour");
+  renderActivityPattern(stats.by_weekday, "weekday");
 }
 
 function renderDiscovered(devices) {
@@ -638,6 +685,23 @@ document.querySelector("#stop-button").addEventListener("click", async () => {
     notify("Service stopped.");
   } catch (error) {
     notify(error.message, true);
+  }
+});
+
+document.querySelector("#restart-button").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = "Restarting...";
+  try {
+    await api("/api/service/restart", { method: "POST" });
+    await refreshService();
+    await refreshNowPlaying();
+    notify("Service restarted.");
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    button.textContent = "Restart service";
+    await refreshService();
   }
 });
 

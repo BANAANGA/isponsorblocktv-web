@@ -87,6 +87,33 @@ chmod 600 .env
 Then start Compose with `docker compose up --build -d`; Compose loads `.env`
 automatically.
 
+### Install with Arcane
+
+1. In Arcane, select the Docker environment where you want to run the service
+   and create a new Compose stack.
+2. Use the public Git repository
+   `https://github.com/BANAANGA/isponsorblocktv-web`, branch `main`, and the
+   repository's `compose.yaml`. If your Arcane setup does not deploy stacks
+   from Git, paste the contents of `compose.yaml` into its Compose editor.
+3. Add these stack environment variables, replacing the example username and
+   password with your own strong credentials:
+
+   ```dotenv
+   WEB_USERNAME=admin
+   WEB_PASSWORD=replace-this-with-a-long-unique-password
+   COOKIE_SECURE=false
+   ```
+
+   Keep `COOKIE_SECURE=false` when accessing Arcane's published HTTP port
+   directly. Set it to `true` when the web manager is accessed through an HTTPS
+   reverse proxy.
+4. Deploy the stack. Confirm that Arcane publishes container port `8000` on
+   host port `8000` and retains the named `isponsorblocktv-data` volume across
+   redeployments.
+5. Open `http://<docker-host-address>:8000` and sign in with the credentials
+   you configured. For automatic TV discovery, the container also needs access
+   to your local network; pairing with a YouTube TV code works without it.
+
 ### Local-network device discovery
 
 Automatic discovery uses DIAL and Chromecast and requires local-network access.
@@ -154,6 +181,14 @@ saved logs.
 - Configure the maximum number of retained video-history entries (100 to
   10,000); oldest entries are automatically removed. Delete viewing history
   and its related activity statistics from the Settings tab when needed.
+- Turn off video-history recording in Settings to stop saving new per-video
+  entries, metadata, and video IDs with skip events. Aggregate watched/skip
+  statistics and current playback continue; previously recorded history remains
+  until deleted.
+- Dashboard activity-by-hour and activity-by-weekday graphs compare watched
+  and skipped time, and identify each peak period. These breakdowns use UTC;
+  watched-time breakdowns start with this version because older totals were not
+  timestamped by hour or weekday.
 - Dashboard time comparison estimates watched time from forward playback
   position changes and compares it with SponsorBlock skip durations. Older
   playback sessions are not backfilled.
