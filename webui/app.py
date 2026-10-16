@@ -9,7 +9,7 @@ import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
@@ -29,7 +29,6 @@ from pyytlounge.exceptions import (
 from starlette.middleware.sessions import SessionMiddleware
 
 from .activity import ActivityStore
-from .youtube import extract_youtube_video_id
 
 logger = logging.getLogger("isponsorblocktv.webui")
 
@@ -162,6 +161,7 @@ class ChannelSearchPayload(BaseModel):
 
 class DeviceControlPayload(BaseModel):
     screen_id: str = Field(min_length=1, max_length=512)
+    action: Literal["play", "pause"]
 
     @field_validator("screen_id")
     @classmethod
@@ -169,10 +169,6 @@ class DeviceControlPayload(BaseModel):
         if not value.strip():
             raise ValueError("Screen ID cannot be empty")
         return value.strip()
-
-
-class PlayVideoPayload(DeviceControlPayload):
-    video: str = Field(min_length=1, max_length=2048)
 
 
 def _session_secret() -> str:
@@ -578,7 +574,7 @@ async def get_now_playing() -> dict[str, Any]:
     return {"items": activity_store.now_playing()}
 
 
-async def _send_device_command(screen_id: str, *, action: str, video_id: str = "") -> None:
+async def _send_device_command(screen_id: str, *, action: str) -> None:
     configured = load_config()
     if not any(device.get("screen_id") == screen_id for device in configured["devices"]):
         raise HTTPException(status_code=404, detail="The selected device is not configured")
@@ -601,11 +597,7 @@ async def _send_device_command(screen_id: str, *, action: str, video_id: str = "
                 raise HTTPException(status_code=503, detail="The selected TV is not available")
             if not await client.connect():
                 raise HTTPException(status_code=503, detail="Could not connect to the selected TV")
-            succeeded = (
-                await client.pause()
-                if action == "pause"
-                else await client.play_video(video_id)
-            )
+            succeeded = await client.pause() if action == "pause" else await client.play()
             if not succeeded:
                 raise HTTPException(
                     status_code=502,
@@ -635,19 +627,11 @@ async def _send_device_command(screen_id: str, *, action: str, video_id: str = "
         await client.close()
 
 
-@app.post("/api/devices/pause", dependencies=[Depends(require_csrf)])
-async def pause_device(payload: DeviceControlPayload) -> dict[str, bool]:
-    await _send_device_command(payload.screen_id, action="pause")
-    return {"success": True}
-
-
-@app.post("/api/devices/play-video", dependencies=[Depends(require_csrf)])
-async def play_video_on_device(payload: PlayVideoPayload) -> dict[str, bool]:
-    try:
-        video_id = extract_youtube_video_id(payload.video)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    await _send_device_command(payload.screen_id, action="play-video", video_id=video_id)
+@app.post("/api/devices/playback", dependencies=[Depends(require_csrf)])
+async def control_device_playback(
+    payload: DeviceControlPayload,
+) -> dict[str, bool]:
+    await _send_device_command(payload.screen_id, action=payload.action)
     return {"success": True}
 
 

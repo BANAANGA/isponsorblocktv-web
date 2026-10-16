@@ -62,6 +62,7 @@ class ActivityStore:
                     device TEXT PRIMARY KEY,
                     screen_id TEXT NOT NULL DEFAULT '',
                     video_id TEXT NOT NULL,
+                    is_playing INTEGER NOT NULL DEFAULT 1,
                     position_seconds REAL NOT NULL DEFAULT 0,
                     duration_seconds REAL NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL
@@ -108,6 +109,7 @@ class ActivityStore:
             }
             for name, declaration in (
                 ("screen_id", "TEXT NOT NULL DEFAULT ''"),
+                ("is_playing", "INTEGER NOT NULL DEFAULT 1"),
                 ("position_seconds", "REAL NOT NULL DEFAULT 0"),
                 ("duration_seconds", "REAL NOT NULL DEFAULT 0"),
             ):
@@ -278,6 +280,7 @@ class ActivityStore:
         device: str,
         *,
         playing: bool,
+        active: bool | None = None,
         screen_id: str = "",
         position_seconds: float = 0,
         duration_seconds: float = 0,
@@ -293,17 +296,21 @@ class ActivityStore:
             if math.isfinite(duration_seconds) and duration_seconds > 0
             else 0.0
         )
+        if active is None:
+            active = playing
         with self._connection() as connection:
-            if playing and video_id:
+            if active and video_id:
                 connection.execute(
                     """
                     INSERT INTO now_playing (
-                        device, screen_id, video_id, position_seconds, duration_seconds, updated_at
+                        device, screen_id, video_id, is_playing, position_seconds,
+                        duration_seconds, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(device) DO UPDATE SET
                         screen_id = excluded.screen_id,
                         video_id = excluded.video_id,
+                        is_playing = excluded.is_playing,
                         position_seconds = excluded.position_seconds,
                         duration_seconds = excluded.duration_seconds,
                         updated_at = excluded.updated_at
@@ -312,6 +319,7 @@ class ActivityStore:
                         device,
                         screen_id,
                         video_id,
+                        int(playing),
                         position_seconds,
                         duration_seconds,
                         (now or datetime.now(UTC)).isoformat(),
@@ -326,6 +334,7 @@ class ActivityStore:
             rows = connection.execute(
                 """
                 SELECT current.device, current.screen_id, current.video_id,
+                    current.is_playing,
                     current.position_seconds, current.duration_seconds, current.updated_at,
                     COALESCE(history.title, current.video_id) AS title,
                     COALESCE(history.channel, '') AS channel,
@@ -338,7 +347,7 @@ class ActivityStore:
                         WHERE video_id = current.video_id AND device = current.device
                         ORDER BY started_at DESC LIMIT 1
                     )
-                WHERE current.updated_at >= ?
+                WHERE current.updated_at >= ? OR current.is_playing = 0
                 ORDER BY current.device
                 """,
                 (cutoff,),
