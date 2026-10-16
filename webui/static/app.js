@@ -266,20 +266,47 @@ async function refreshStats() {
   };
   const categories = document.querySelector("#category-stats");
   const chart = document.querySelector("#category-chart");
+  const legend = document.querySelector("#category-legend");
   if (stats.by_category.length) {
-    const maximumCategorySeconds = Math.max(1, ...stats.by_category.map((item) => Number(item.seconds_saved) || 0));
-    chart.innerHTML = stats.by_category.map((item) => {
-      const seconds = Number(item.seconds_saved) || 0;
-      const width = Math.max(1, seconds / maximumCategorySeconds * 100);
+    const palette = [
+      "#ff525b", "#ff9f43", "#ffd166", "#9be564", "#42d6a4",
+      "#43c6db", "#5b9dff", "#9b79ff", "#e879cf", "#ff7892",
+    ];
+    const totalSegments = stats.by_category.reduce((sum, item) => sum + (Number(item.segments_skipped) || 0), 0);
+    let angle = 0;
+    const slices = stats.by_category.map((item, index) => {
+      const count = Number(item.segments_skipped) || 0;
+      const start = angle;
+      angle += totalSegments ? count / totalSegments * 360 : 0;
+      return {
+        ...item,
+        color: palette[index % palette.length],
+        percent: totalSegments ? count / totalSegments * 100 : 0,
+        start,
+        end: angle,
+      };
+    });
+    const gradient = totalSegments
+      ? slices.map((item) => `${item.color} ${item.start.toFixed(2)}deg ${item.end.toFixed(2)}deg`).join(", ")
+      : "#35434f 0deg 360deg";
+    chart.style.background = `conic-gradient(${gradient})`;
+    chart.setAttribute(
+      "aria-label",
+      `Pie chart of ${totalSegments} skipped segments across ${slices.length} categories`,
+    );
+    legend.innerHTML = slices.map((item) => {
       const name = categoryNames[item.category] || item.category;
-      return `<div class="category-chart-row">
-        <span>${escapeHtml(name)}</span>
-        <progress class="category-bar" value="${Math.round(width)}" max="100" aria-label="${escapeHtml(name)}: ${escapeHtml(formatDuration(seconds))} saved"></progress>
-        <strong>${escapeHtml(formatDuration(seconds))}</strong>
+      return `<div class="category-legend-row">
+        <span class="category-swatch" style="--slice-color:${item.color}"></span>
+        <span class="category-legend-name">${escapeHtml(name)}</span>
+        <strong>${Number(item.segments_skipped) || 0}</strong>
+        <small>${item.percent.toFixed(1)}%</small>
       </div>`;
     }).join("");
   } else {
-    chart.innerHTML = '<div class="empty-state">Category charts will appear after the first skip.</div>';
+    chart.style.background = "conic-gradient(#35434f 0deg 360deg)";
+    chart.setAttribute("aria-label", "No skipped segments have been recorded yet");
+    legend.innerHTML = '<div class="empty-state">Category charts will appear after the first skip.</div>';
   }
   categories.innerHTML = stats.by_category.length
     ? stats.by_category.map((item) => `
