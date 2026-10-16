@@ -162,8 +162,11 @@
               <div id="recent-stats" class="stats-grid stats-grid-compact"></div>
             </div>
             <div class="card">
-              <div class="card-heading"><div><h2>Skipped by category</h2><p>Count and estimated time saved for each SponsorBlock category.</p></div></div>
-              <div id="category-chart" class="category-chart" aria-label="Skipped time by category"></div>
+              <div class="card-heading"><div><h2>Skipped by category</h2><p>Share of skipped SponsorBlock segments by category.</p></div></div>
+              <div class="category-pie-layout">
+                <div id="category-chart" class="category-pie" role="img" aria-label="Pie chart of skipped video segments by category"></div>
+                <div id="category-legend" class="category-legend"></div>
+              </div>
               <div class="table-scroll">
                 <table class="data-table">
                   <thead><tr><th>Category</th><th>Segments</th><th>Skip events</th><th>Time saved</th></tr></thead>
@@ -201,6 +204,6 @@
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=red-stats-history-channel" defer></script>
+    <script src="/static/app.js?v=category-pie-chart" defer></script>
   </body>
 </html>
