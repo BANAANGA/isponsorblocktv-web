@@ -24,7 +24,7 @@ button { cursor: pointer; }
 .topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #21313d; }
 .brand { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font: 600 15px system-ui, sans-serif; }
 .brand small { display: block; color: var(--muted); font: 600 9px system-ui, sans-serif; letter-spacing: .16em; margin-top: 3px; }
-.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; color: #08150f; background: var(--accent); border-radius: 12px; font: 700 14px system-ui, sans-serif; }
+.brand-mark { display: block; width: 38px; height: 38px; border-radius: 9px; }
 .header-actions, .service-actions, .card-heading, .log-actions, .save-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .status-pill { border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
 .status-pill.running { color: var(--accent); border-color: #71333a; background: #281519; }
@@ -80,7 +80,16 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .log-card { padding-bottom: 16px; }
 .log-actions { flex-wrap: wrap; justify-content: flex-end; }
 .toggle-label { flex-direction: row; align-items: center; }
-.log-output { height: min(65vh, 640px); min-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-word; padding: 16px; border: 1px solid #263847; border-radius: 10px; color: #c3d4df; background: #081016; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.log-output { height: min(65vh, 640px); min-height: 300px; overflow: auto; padding: 8px 14px; border: 1px solid #263847; border-radius: 10px; color: #c3d4df; background: #081016; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.log-entry { display: grid; grid-template-columns: 190px 72px minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1a2832; }
+.log-entry:last-child { border-bottom: 0; }
+.log-entry time { color: #8297a6; white-space: nowrap; }
+.log-level { color: #9bafbe; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.log-message { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.log-warning .log-level { color: #ffd178; }
+.log-error .log-level, .log-critical .log-level { color: var(--danger); }
+.log-debug .log-level { color: #98c9ff; }
+.log-empty { padding: 12px 0; color: var(--muted); }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .stats-grid-compact { margin-bottom: 0; }
 .stats-heading { align-items: center; }
@@ -130,6 +139,7 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .history-video .history-channel:hover { color: var(--accent); }
 .history-row time { text-align: right; }
 .history-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 15px; }
+.history-search { max-width: 520px; margin: 0 0 12px; }
 .pairing-help { margin: 0 0 15px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 12px; }
 .pairing-help summary { color: var(--text); cursor: pointer; font-weight: 600; }
 .pairing-help ol { display: grid; gap: 5px; padding-left: 20px; line-height: 1.5; }
@@ -163,4 +173,7 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
   .device-row label { min-width: calc(50% - 8px); }
   .device-row .offset-label { max-width: unset; }
   .log-actions { justify-content: flex-start; }
+  .log-entry { grid-template-columns: minmax(0, 1fr) 64px; gap: 3px 10px; }
+  .log-entry time { grid-column: 1 / -1; }
+  .log-message { grid-column: 1 / -1; }
 }

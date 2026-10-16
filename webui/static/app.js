@@ -18,6 +18,8 @@ let settings = null;
 let logPolling = null;
 let toastTimeout = null;
 let historyOffset = 0;
+let historySearchTimeout = null;
+let historyRequestId = 0;
 const historyPageSize = 50;
 
 function escapeHtml(value) {
@@ -175,7 +177,19 @@ async function refreshLogs() {
   try {
     const result = await api("/api/logs?limit=1000");
     const nearBottom = elements.logOutput.scrollHeight - elements.logOutput.scrollTop - elements.logOutput.clientHeight < 80;
-    elements.logOutput.textContent = result.lines.join("\n") || "No service logs yet.";
+    elements.logOutput.innerHTML = result.lines.length
+      ? result.lines.map((line) => {
+        const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}[T ][0-9:.+Z-]+)\s*/);
+        const timestamp = timestampMatch?.[1] || "";
+        const remainder = timestampMatch ? line.slice(timestampMatch[0].length) : line;
+        const levelMatch = remainder.match(/^\s*(?:\[)?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b/i);
+        const level = levelMatch?.[1]?.toUpperCase() || "LOG";
+        const message = levelMatch
+          ? remainder.replace(/^\s*\[?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b\]?\s*[:| -]?\s*/i, "")
+          : remainder;
+        return `<div class="log-entry log-${level.toLowerCase()}"><time>${escapeHtml(timestamp)}</time><span class="log-level">${level}</span><span class="log-message">${escapeHtml(message)}</span></div>`;
+      }).join("")
+      : '<div class="log-empty">No service logs yet.</div>';
     document.querySelector("#log-count").textContent = `(${result.lines.length})`;
     if (nearBottom) elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
   } catch (error) {
@@ -199,11 +213,19 @@ function formatDate(value) {
 }
 
 async function refreshHistory(reset = true) {
+  const requestId = ++historyRequestId;
+  const search = document.querySelector("#history-search").value.trim();
   if (reset) {
     historyOffset = 0;
     elements.historyList.innerHTML = "";
   }
-  const result = await api(`/api/history?limit=${historyPageSize}&offset=${historyOffset}`);
+  const query = new URLSearchParams({
+    limit: historyPageSize,
+    offset: historyOffset,
+    search,
+  });
+  const result = await api(`/api/history?${query}`);
+  if (requestId !== historyRequestId) return;
   const items = result.items.map((video) => `
     <article class="history-row">
       <a class="history-thumbnail" href="https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${escapeHtml(video.title || video.video_id)}">
@@ -220,13 +242,15 @@ async function refreshHistory(reset = true) {
       <time datetime="${escapeHtml(video.started_at)}">${escapeHtml(formatDate(video.started_at))}</time>
     </article>`).join("");
   if (reset && !result.items.length) {
-    elements.historyList.innerHTML = '<div class="empty-state">No videos have been recorded yet. History begins when the service detects playback on a paired device.</div>';
+    elements.historyList.innerHTML = `<div class="empty-state">${search
+      ? "No video history matches your search."
+      : "No videos have been recorded yet. History begins when the service detects playback on a paired device."}</div>`;
   } else {
     elements.historyList.insertAdjacentHTML("beforeend", items);
   }
   historyOffset += result.items.length;
   document.querySelector("#history-summary").textContent =
-    `Showing ${historyOffset} of ${result.total} video sessions`;
+    `Showing ${historyOffset} of ${result.total} video sessions${search ? ` matching “${search}”` : ""}`;
   document.querySelector("#load-more-history").hidden = historyOffset >= result.total;
 }
 
@@ -538,6 +562,12 @@ document.querySelector("#refresh-stats").addEventListener("click", () => {
 });
 document.querySelector("#refresh-history").addEventListener("click", () => {
   refreshHistory().catch((error) => notify(error.message, true));
+});
+document.querySelector("#history-search").addEventListener("input", () => {
+  clearTimeout(historySearchTimeout);
+  historySearchTimeout = setTimeout(() => {
+    refreshHistory().catch((error) => notify(error.message, true));
+  }, 250);
 });
 document.querySelector("#load-more-history").addEventListener("click", () => {
   refreshHistory(false).catch((error) => notify(error.message, true));
