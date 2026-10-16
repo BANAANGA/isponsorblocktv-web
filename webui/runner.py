@@ -140,6 +140,7 @@ def install_activity_hooks(store: ActivityStore) -> None:
             video_id,
             self.name,
             playing=is_playing,
+            active=getattr(getattr(state, "state", None), "value", None) in {1, 2},
             screen_id=self.lounge_controller.auth.screen_id or "",
             position_seconds=position,
             duration_seconds=duration,

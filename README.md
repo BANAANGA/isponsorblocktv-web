@@ -180,8 +180,8 @@ saved logs.
   thumbnails, public video titles and channel names, skipped segments by
   category and device, skip events, and estimated time saved overall and over
   the last 30 days. The Dashboard tab is the first page shown after sign-in and
-  includes a current playback widget with watched percentage, pause controls,
-  and a form to start a video on a paired device using its YouTube URL or ID,
+  includes a current playback widget with watched percentage and play/pause
+  controls for videos already playing on paired devices,
   plus watched-versus-skipped and category pie charts, daily time comparisons,
   and a most-watched videos graph.
 - Configure the maximum number of retained video-history entries (100 to

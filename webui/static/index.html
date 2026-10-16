@@ -178,20 +178,11 @@
           <div id="stats-content">
           <div id="now-playing" class="card now-playing-card">
             <div class="card-heading">
-              <div><h2>Now playing</h2><p>Current playback across your paired devices.</p></div>
+              <div><h2>Now playing</h2><p>Current or paused playback across your paired devices.</p></div>
             </div>
             <div id="now-playing-content" class="now-playing-content">
-              <div class="empty-state">Nothing is currently playing.</div>
+              <div class="empty-state">No current or paused playback.</div>
             </div>
-            <form id="play-video-form" class="play-video-form">
-              <label>Play on
-                <select name="screen_id" required></select>
-              </label>
-              <label>YouTube video URL or ID
-                <input name="video" type="text" maxlength="2048" placeholder="https://youtu.be/... or video ID" required>
-              </label>
-              <button class="button button-primary" type="submit">Play video</button>
-            </form>
           </div>
           <div class="card-heading stats-heading">
             <div><h2>Activity overview</h2><p>Your viewing and SponsorBlock statistics.</p></div>

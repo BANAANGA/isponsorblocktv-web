@@ -106,7 +106,6 @@ function populateTimezones() {
 function renderDevices() {
   if (!settings.devices.length) {
     elements.devices.innerHTML = '<div class="empty-state">No devices paired yet. Add one below to get started.</div>';
-    renderPlayerDevices();
     return;
   }
   elements.devices.innerHTML = settings.devices.map((device, index) => `
@@ -116,20 +115,6 @@ function renderDevices() {
       <label class="offset-label">Skip offset (ms)<input data-field="offset" type="number" min="-60000" max="60000" step="10" value="${Number(device.offset) || 0}"></label>
       <button class="button button-quiet remove-device" type="button">Remove</button>
     </div>`).join("");
-  renderPlayerDevices();
-}
-
-function renderPlayerDevices() {
-  const select = document.querySelector("#play-video-form select[name='screen_id']");
-  if (!select) return;
-  const previous = select.value;
-  const devices = settings?.devices || [];
-  select.innerHTML = devices.map((device) => `
-    <option value="${escapeHtml(device.screen_id)}">${escapeHtml(device.name || device.screen_id)}</option>
-  `).join("");
-  if (devices.some((device) => device.screen_id === previous)) select.value = previous;
-  select.disabled = devices.length === 0;
-  document.querySelector("#play-video-form button[type='submit']").disabled = devices.length === 0;
 }
 
 function renderChannels() {
@@ -399,7 +384,7 @@ async function refreshNowPlaying() {
             <span class="play-icon" aria-hidden="true">▶</span>
           </a>
           <div class="now-playing-details">
-            <span class="now-playing-indicator"><span></span> PLAYING</span>
+            <span class="now-playing-indicator ${item.is_playing ? "is-playing" : "is-paused"}"><span></span> ${item.is_playing ? "PLAYING" : "PAUSED"}</span>
             <a class="now-playing-title" href="https://www.youtube.com/watch?v=${encodeURIComponent(item.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title || item.video_id)}</a>
             <span class="now-playing-channel">${escapeHtml(item.channel || "Unknown channel")}</span>
             <span class="now-playing-device">${escapeHtml(item.device)}</span>
@@ -408,53 +393,31 @@ async function refreshNowPlaying() {
                 <span>Watched ${Number(item.viewed_percent).toFixed(0)}%</span>
                 <progress max="100" value="${Number(item.viewed_percent)}" aria-label="Watched ${Number(item.viewed_percent).toFixed(0)} percent"></progress>
               </div>`}
-            <button class="button button-quiet pause-device" type="button" data-screen-id="${escapeHtml(item.screen_id)}">Pause</button>
+            <button class="button button-quiet playback-toggle" type="button" data-screen-id="${escapeHtml(item.screen_id)}" data-action="${item.is_playing ? "pause" : "play"}">${item.is_playing ? "Pause" : "Play"}</button>
           </div>
         </article>`).join("")
-      : '<div class="empty-state">Nothing is currently playing.</div>';
+      : '<div class="empty-state">No current or paused playback.</div>';
   } catch (error) {
     content.textContent = `Could not load current playback: ${error.message}`;
   }
 }
 
 document.querySelector("#now-playing-content").addEventListener("click", async (event) => {
-  const button = event.target.closest(".pause-device");
+  const button = event.target.closest(".playback-toggle");
   if (!button) return;
   button.disabled = true;
+  const action = button.dataset.action;
   try {
-    await api("/api/devices/pause", {
+    await api("/api/devices/playback", {
       method: "POST",
-      body: JSON.stringify({ screen_id: button.dataset.screenId }),
+      body: JSON.stringify({ screen_id: button.dataset.screenId, action }),
     });
-    notify("Playback paused.");
+    notify(action === "pause" ? "Playback paused." : "Playback resumed.");
     await refreshNowPlaying();
   } catch (error) {
     notify(error.message, true);
   } finally {
     button.disabled = false;
-  }
-});
-
-document.querySelector("#play-video-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const button = form.querySelector('button[type="submit"]');
-  button.disabled = true;
-  try {
-    await api("/api/devices/play-video", {
-      method: "POST",
-      body: JSON.stringify({
-        screen_id: form.elements.screen_id.value,
-        video: form.elements.video.value.trim(),
-      }),
-    });
-    form.elements.video.value = "";
-    notify("Video sent to the TV.");
-    await refreshNowPlaying();
-  } catch (error) {
-    notify(error.message, true);
-  } finally {
-    button.disabled = settings.devices.length === 0;
   }
 });
 
@@ -713,7 +676,6 @@ elements.devices.addEventListener("input", (event) => {
   const row = event.target.closest(".device-row");
   const device = settings.devices[Number(row.dataset.index)];
   device[field] = field === "offset" ? Number(event.target.value || 0) : event.target.value;
-  renderPlayerDevices();
 });
 
 elements.devices.addEventListener("click", (event) => {

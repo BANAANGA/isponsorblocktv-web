@@ -186,14 +186,15 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .now-playing-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .now-playing-details { display: grid; min-width: 0; gap: 6px; }
 .now-playing-indicator { display: flex; align-items: center; gap: 7px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
-.now-playing-indicator span { width: 8px; height: 8px; border-radius: 50%; background: #ff525b; box-shadow: 0 0 10px #ff525b99; }
+.now-playing-indicator span { width: 8px; height: 8px; border-radius: 50%; }
+.now-playing-indicator.is-playing span { background: #82e6a0; box-shadow: 0 0 10px #82e6a099; }
+.now-playing-indicator.is-paused span { background: #f0b44b; box-shadow: 0 0 10px #f0b44b99; }
 .now-playing-title { overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .now-playing-title:hover { color: var(--accent); }
 .now-playing-channel, .now-playing-device { color: var(--muted); font-size: 11px; }
 .now-playing-progress { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
 .now-playing-progress progress { width: 100%; height: 7px; accent-color: var(--accent); }
 .now-playing-progress-label { color: var(--muted); font-size: 11px; }
-.play-video-form { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1.5fr) auto; align-items: end; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .history-list { display: grid; }
 .history-row { display: grid; grid-template-columns: 144px minmax(0, 1fr) minmax(100px, .4fr) minmax(140px, .5fr); align-items: center; gap: 14px; padding: 15px 4px; border-bottom: 1px solid #20303c; }
 .history-row:last-child { border-bottom: 0; }
@@ -242,7 +243,6 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
   .history-device { text-align: left; }
   .history-row time { grid-column: 1 / -1; text-align: left; }
   .now-playing-item { grid-template-columns: 112px minmax(0, 1fr); }
-  .play-video-form { grid-template-columns: 1fr; }
   .pair-row { align-items: stretch; flex-direction: column; }
   .device-row { align-items: stretch; flex-wrap: wrap; }
   .device-row label { min-width: calc(50% - 8px); }

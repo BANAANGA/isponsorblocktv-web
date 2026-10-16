@@ -286,15 +286,34 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertEqual(current[0]["thumbnail_url"], "https://example.com/thumb.jpg")
         self.assertEqual(current[0]["screen_id"], "screen-1")
         self.assertEqual(current[0]["viewed_percent"], 25)
+        self.assertEqual(current[0]["is_playing"], 1)
 
-        self.store.set_now_playing("video-1", "Living room", playing=False)
+        self.store.set_now_playing(
+            "video-1", "Living room", playing=False, active=True, now=now + timedelta(minutes=5)
+        )
+        paused = self.store.now_playing()
+        self.assertEqual(len(paused), 1)
+        self.assertEqual(paused[0]["is_playing"], 0)
+
+        self.store.set_now_playing(
+            "video-1",
+            "Living room",
+            playing=False,
+            active=False,
+        )
         self.assertEqual(self.store.now_playing(), [])
 
     def test_now_playing_ignores_stale_playback_updates(self) -> None:
         stale = datetime.now(UTC) - timedelta(minutes=5)
         self.store.set_now_playing("video-1", "Living room", playing=True, now=stale)
+        self.store.set_now_playing(
+            "video-2", "Kitchen", playing=False, active=True, now=stale
+        )
 
-        self.assertEqual(self.store.now_playing(), [])
+        current = self.store.now_playing()
+        self.assertEqual(len(current), 1)
+        self.assertEqual(current[0]["video_id"], "video-2")
+        self.assertEqual(current[0]["is_playing"], 0)
 
     def test_existing_activity_database_migrates_video_metadata_columns(self) -> None:
         legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
@@ -335,7 +354,9 @@ class ActivityStoreTests(unittest.TestCase):
                 row[1] for row in connection.execute("PRAGMA table_info(now_playing)")
             }
         self.assertTrue(
-            {"screen_id", "position_seconds", "duration_seconds"}.issubset(now_playing_columns)
+            {"screen_id", "is_playing", "position_seconds", "duration_seconds"}.issubset(
+                now_playing_columns
+            )
         )
 
     def test_activity_migration_backfills_daily_watch_totals(self) -> None:
