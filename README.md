@@ -138,8 +138,14 @@ saved logs.
   URL, plus upstream debug logging and HTTP tracing switches.
 - Start/stop controls and a live-refreshing log viewer for the upstream
   service, with log persistence and rotation.
-- Persistent upstream configuration in `/data/config.json` and web-manager
-  settings in `/data/webui-settings.json`.
+- Video history with direct YouTube links and statistics for watched videos,
+  skipped segments by category and device, skip events, and estimated time
+  saved overall and over the last 30 days.
+- Activity is recorded from the time this version is installed; the upstream
+  service does not provide older playback history to backfill.
+- Persistent upstream configuration in `/data/config.json`, web-manager
+  settings in `/data/webui-settings.json`, and activity in
+  `/data/activity.sqlite3`.
 
 The web manager is licensed under GPL-3.0 and uses the GPL-3.0 upstream
 iSponsorBlockTV package. Upstream code is installed as a pinned dependency, not

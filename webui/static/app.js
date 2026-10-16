@@ -9,6 +9,7 @@ const elements = {
   discovered: document.querySelector("#discovered-devices"),
   channelResults: document.querySelector("#channel-results"),
   logOutput: document.querySelector("#log-output"),
+  historyList: document.querySelector("#history-list"),
   toast: document.querySelector("#toast"),
 };
 
@@ -16,6 +17,8 @@ let csrfToken = "";
 let settings = null;
 let logPolling = null;
 let toastTimeout = null;
+let historyOffset = 0;
+const historyPageSize = 50;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -177,6 +180,113 @@ async function refreshLogs() {
   } catch (error) {
     elements.logOutput.textContent = error.message;
   }
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+}
+
+async function refreshHistory(reset = true) {
+  if (reset) {
+    historyOffset = 0;
+    elements.historyList.innerHTML = "";
+  }
+  const result = await api(`/api/history?limit=${historyPageSize}&offset=${historyOffset}`);
+  const items = result.items.map((video) => `
+    <article class="history-row">
+      <div class="history-video">
+        <a href="https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(video.title || video.video_id)}</a>
+        <small>${escapeHtml(video.video_id)} · ${Number(video.segment_count) || 0} SponsorBlock segments found</small>
+      </div>
+      <span class="history-device">${escapeHtml(video.device)}</span>
+      <time datetime="${escapeHtml(video.started_at)}">${escapeHtml(formatDate(video.started_at))}</time>
+    </article>`).join("");
+  if (reset && !result.items.length) {
+    elements.historyList.innerHTML = '<div class="empty-state">No videos have been recorded yet. History begins when the service detects playback on a paired device.</div>';
+  } else {
+    elements.historyList.insertAdjacentHTML("beforeend", items);
+  }
+  historyOffset += result.items.length;
+  document.querySelector("#history-summary").textContent =
+    `Showing ${historyOffset} of ${result.total} video sessions`;
+  document.querySelector("#load-more-history").hidden = historyOffset >= result.total;
+}
+
+function renderMetric(label, value, detail = "") {
+  return `<article class="metric-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</article>`;
+}
+
+async function refreshStats() {
+  const stats = await api("/api/stats");
+  const total = stats.totals;
+  const recent = stats.last_30_days;
+  document.querySelector("#total-stats").innerHTML = [
+    renderMetric("Videos watched", total.videos_watched),
+    renderMetric("Skip events", total.skip_events, `${total.segments_skipped} submitted segments`),
+    renderMetric("Time saved", formatDuration(total.seconds_saved), `${Number(total.seconds_saved).toFixed(0)} seconds total`),
+    renderMetric("Saved days", `${Number(total.time_saved_days).toFixed(2)} days`),
+  ].join("");
+  document.querySelector("#recent-stats").innerHTML = [
+    renderMetric("Videos", recent.videos_watched),
+    renderMetric("Skip events", recent.skip_events),
+    renderMetric("Segments skipped", recent.segments_skipped),
+    renderMetric("Time saved", formatDuration(recent.seconds_saved)),
+  ].join("");
+
+  const categoryNames = {
+    sponsor: "Sponsor",
+    selfpromo: "Self promotion",
+    exclusive_access: "Exclusive access",
+    interaction: "Interaction reminder",
+    intro: "Intro",
+    outro: "Outro",
+    preview: "Preview / recap",
+    filler: "Filler",
+    music_offtopic: "Off-topic music",
+    hook: "Hook / greeting",
+    unknown: "Other",
+  };
+  const categories = document.querySelector("#category-stats");
+  categories.innerHTML = stats.by_category.length
+    ? stats.by_category.map((item) => `
+      <tr><td>${escapeHtml(categoryNames[item.category] || item.category)}</td>
+      <td>${Number(item.segments_skipped) || 0}</td>
+      <td>${Number(item.skip_events) || 0}</td>
+      <td>${escapeHtml(formatDuration(item.seconds_saved))}</td></tr>`).join("")
+    : '<tr><td colspan="4" class="empty-state">No skips recorded yet.</td></tr>';
+
+  const devices = document.querySelector("#device-stats");
+  devices.innerHTML = stats.by_device.length
+    ? stats.by_device.map((device) => `
+      <article class="stats-list-row"><strong>${escapeHtml(device.device)}</strong>
+      <span>${Number(device.skip_events) || 0} skips · ${Number(device.segments_skipped) || 0} segments</span>
+      <small>${escapeHtml(formatDuration(device.seconds_saved))} saved</small></article>`).join("")
+    : '<div class="empty-state">Device skip statistics will appear here.</div>';
+
+  const daily = document.querySelector("#daily-stats");
+  if (!stats.daily.length) {
+    daily.innerHTML = '<div class="empty-state">Daily activity will appear after the first skip.</div>';
+    return;
+  }
+  const maxSeconds = Math.max(1, ...stats.daily.map((item) => Number(item.seconds_saved) || 0));
+  daily.innerHTML = stats.daily.map((item) => {
+    const seconds = Number(item.seconds_saved) || 0;
+    const width = Math.max(2, (seconds / maxSeconds) * 100);
+    return `<div class="daily-row" title="${escapeHtml(item.day)}: ${escapeHtml(formatDuration(seconds))} saved">
+      <time>${escapeHtml(item.day.slice(5))}</time><span class="daily-bar-track"><progress class="daily-bar" value="${Math.round(width)}" max="100" aria-label="${escapeHtml(formatDuration(seconds))} saved"></progress></span>
+      <strong>${escapeHtml(formatDuration(seconds))}</strong></div>`;
+  }).join("");
 }
 
 function renderDiscovered(devices) {
@@ -373,6 +483,12 @@ document.querySelector("#stop-button").addEventListener("click", async () => {
 });
 
 document.querySelector("#refresh-logs").addEventListener("click", refreshLogs);
+document.querySelector("#refresh-history").addEventListener("click", () => {
+  refreshHistory().catch((error) => notify(error.message, true));
+});
+document.querySelector("#load-more-history").addEventListener("click", () => {
+  refreshHistory(false).catch((error) => notify(error.message, true));
+});
 document.querySelector("#clear-logs").addEventListener("click", () => {
   elements.logOutput.textContent = "Log view cleared. Service output will reappear on refresh.";
 });
@@ -380,9 +496,16 @@ document.querySelector("#clear-logs").addEventListener("click", () => {
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", async () => {
     document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item === tab));
-    document.querySelector("#settings-tab").hidden = tab.dataset.tab !== "settings";
-    document.querySelector("#logs-tab").hidden = tab.dataset.tab !== "logs";
-    if (tab.dataset.tab === "logs") await refreshLogs();
+    document.querySelectorAll(".tab-content").forEach((section) => {
+      section.hidden = section.id !== `${tab.dataset.tab}-tab`;
+    });
+    try {
+      if (tab.dataset.tab === "logs") await refreshLogs();
+      if (tab.dataset.tab === "history") await refreshHistory();
+      if (tab.dataset.tab === "stats") await refreshStats();
+    } catch (error) {
+      notify(error.message, true);
+    }
   });
 });
 
