@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
+from zoneinfo import ZoneInfo
 
 
 class ActivityStore:
@@ -51,6 +52,10 @@ class ActivityStore:
                 );
                 CREATE TABLE IF NOT EXISTS watch_time_by_weekday (
                     weekday INTEGER PRIMARY KEY CHECK (weekday BETWEEN 0 AND 6),
+                    watched_seconds REAL NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS watch_time_buckets (
+                    bucket_start TEXT PRIMARY KEY,
                     watched_seconds REAL NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS now_playing (
@@ -226,6 +231,7 @@ class ActivityStore:
             connection.execute("DELETE FROM watch_time_daily")
             connection.execute("DELETE FROM watch_time_by_hour")
             connection.execute("DELETE FROM watch_time_by_weekday")
+            connection.execute("DELETE FROM watch_time_buckets")
 
     def update_video_metadata(
         self,
@@ -352,21 +358,16 @@ class ActivityStore:
                 """,
                 (day, seconds),
             )
+            bucket_start = datetime.fromtimestamp(
+                int(timestamp.timestamp()) // 300 * 300, UTC
+            ).isoformat()
             connection.execute(
                 """
-                INSERT INTO watch_time_by_hour (hour, watched_seconds) VALUES (?, ?)
-                ON CONFLICT(hour) DO UPDATE SET
+                INSERT INTO watch_time_buckets (bucket_start, watched_seconds) VALUES (?, ?)
+                ON CONFLICT(bucket_start) DO UPDATE SET
                     watched_seconds = watched_seconds + excluded.watched_seconds
                 """,
-                (timestamp.hour, seconds),
-            )
-            connection.execute(
-                """
-                INSERT INTO watch_time_by_weekday (weekday, watched_seconds) VALUES (?, ?)
-                ON CONFLICT(weekday) DO UPDATE SET
-                    watched_seconds = watched_seconds + excluded.watched_seconds
-                """,
-                (timestamp.weekday(), seconds),
+                (bucket_start, seconds),
             )
 
     def record_skip(
@@ -455,7 +456,8 @@ class ActivityStore:
             "search": search,
         }
 
-    def stats(self) -> dict[str, Any]:
+    def stats(self, timezone_name: str = "UTC") -> dict[str, Any]:
+        timezone = ZoneInfo(timezone_name)
         cutoff = (datetime.now(UTC) - timedelta(days=30)).isoformat()
         with self._connect() as connection:
             totals = connection.execute(
@@ -525,38 +527,24 @@ class ActivityStore:
                 """,
                 (cutoff[:10], cutoff),
             ).fetchall()
-            watched_by_hour = {
-                row["hour"]: row["watched_seconds"]
-                for row in connection.execute(
-                    "SELECT hour, watched_seconds FROM watch_time_by_hour"
-                ).fetchall()
-            }
-            skipped_by_hour = {
-                row["hour"]: row["seconds_saved"]
-                for row in connection.execute(
-                    """
-                    SELECT CAST(strftime('%H', skipped_at) AS INTEGER) AS hour,
-                        SUM(seconds_saved) AS seconds_saved
-                    FROM skip_events GROUP BY hour
-                    """
-                ).fetchall()
-            }
-            watched_by_weekday = {
-                row["weekday"]: row["watched_seconds"]
-                for row in connection.execute(
-                    "SELECT weekday, watched_seconds FROM watch_time_by_weekday"
-                ).fetchall()
-            }
-            skipped_by_weekday = {
-                row["weekday"]: row["seconds_saved"]
-                for row in connection.execute(
-                    """
-                    SELECT (CAST(strftime('%w', skipped_at) AS INTEGER) + 6) % 7 AS weekday,
-                        SUM(seconds_saved) AS seconds_saved
-                    FROM skip_events GROUP BY weekday
-                    """
-                ).fetchall()
-            }
+            watch_buckets = connection.execute(
+                "SELECT bucket_start, watched_seconds FROM watch_time_buckets"
+            ).fetchall()
+            skip_times = connection.execute(
+                "SELECT skipped_at, seconds_saved FROM skip_events"
+            ).fetchall()
+        watched_by_hour = [0.0] * 24
+        watched_by_weekday = [0.0] * 7
+        skipped_by_hour = [0.0] * 24
+        skipped_by_weekday = [0.0] * 7
+        for row in watch_buckets:
+            local_time = datetime.fromisoformat(row["bucket_start"]).astimezone(timezone)
+            watched_by_hour[local_time.hour] += row["watched_seconds"]
+            watched_by_weekday[local_time.weekday()] += row["watched_seconds"]
+        for row in skip_times:
+            local_time = datetime.fromisoformat(row["skipped_at"]).astimezone(timezone)
+            skipped_by_hour[local_time.hour] += row["seconds_saved"]
+            skipped_by_weekday[local_time.weekday()] += row["seconds_saved"]
         return {
             "totals": {
                 "videos_watched": video_count,
@@ -580,16 +568,16 @@ class ActivityStore:
             "by_hour": [
                 {
                     "hour": hour,
-                    "watched_seconds": round(watched_by_hour.get(hour, 0), 1),
-                    "seconds_saved": round(skipped_by_hour.get(hour, 0), 1),
+                    "watched_seconds": round(watched_by_hour[hour], 1),
+                    "seconds_saved": round(skipped_by_hour[hour], 1),
                 }
                 for hour in range(24)
             ],
             "by_weekday": [
                 {
                     "weekday": weekday,
-                    "watched_seconds": round(watched_by_weekday.get(weekday, 0), 1),
-                    "seconds_saved": round(skipped_by_weekday.get(weekday, 0), 1),
+                    "watched_seconds": round(watched_by_weekday[weekday], 1),
+                    "seconds_saved": round(skipped_by_weekday[weekday], 1),
                 }
                 for weekday in range(7)
             ],

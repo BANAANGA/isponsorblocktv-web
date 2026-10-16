@@ -189,9 +189,11 @@ saved logs.
   statistics and current playback continue; previously recorded history remains
   until deleted.
 - Dashboard activity-by-hour and activity-by-weekday graphs compare watched
-  and skipped time, and identify each peak period. These breakdowns use UTC;
-  watched-time breakdowns start with this version because older totals were not
-  timestamped by hour or weekday.
+  and skipped time, and identify each peak period. Choose the IANA time zone
+  used by these breakdowns and video-history timestamps in Settings; choose
+  12-hour or 24-hour time display there as well.
+  Watched-time breakdowns start with this version because older totals were not
+  timestamped precisely enough to convert.
 - Dashboard time comparison estimates watched time from forward playback
   position changes and compares it with SponsorBlock skip durations. Older
   playback sessions are not backfilled.

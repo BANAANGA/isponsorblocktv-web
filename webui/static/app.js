@@ -68,6 +68,7 @@ async function showApp(token) {
   elements.appPanel.hidden = false;
   elements.headerActions.hidden = false;
   settings = await api("/api/config");
+  populateTimezones();
   renderSettings();
   await refreshService();
   await refreshLogs();
@@ -81,6 +82,22 @@ async function showApp(token) {
     refreshService();
     refreshNowPlaying();
   }, 3000);
+}
+
+function populateTimezones() {
+  const select = document.querySelector("#timezone-select");
+  const timezones = typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : [
+      "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
+      "America/Sao_Paulo", "Europe/London", "Europe/Amsterdam", "Europe/Berlin",
+      "Europe/Athens", "Africa/Cairo", "Asia/Dubai", "Asia/Kolkata",
+      "Asia/Shanghai", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland",
+    ];
+  const uniqueTimezones = [...new Set(["UTC", ...timezones, settings.timezone])].sort();
+  select.innerHTML = uniqueTimezones.map((timezone) =>
+    `<option value="${escapeHtml(timezone)}">${escapeHtml(timezone)}</option>`,
+  ).join("");
 }
 
 function renderDevices() {
@@ -146,6 +163,8 @@ function collectSettings() {
     http_tracing: form.elements.http_tracing.checked,
     max_history_videos: Number(form.elements.max_history_videos.value),
     record_video_history: form.elements.record_video_history.checked,
+    timezone: form.elements.timezone.value,
+    time_format: form.elements.time_format.value,
     sponsorblock_api_url: form.elements.sponsorblock_api_url.value.trim(),
   };
 }
@@ -157,7 +176,8 @@ async function saveSettings() {
     await api("/api/config", { method: "PUT", body: JSON.stringify(collectSettings()) });
     settings = collectSettings();
     message.textContent = "Settings saved.";
-    await refreshService();
+    await Promise.all([refreshService(), refreshStats()]);
+    if (!document.querySelector("#history-tab").hidden) await refreshHistory();
     notify("Settings saved.");
   } catch (error) {
     message.textContent = error.message;
@@ -217,7 +237,10 @@ function formatDuration(seconds) {
 
 function formatDate(value) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString(undefined, {
+    timeZone: settings?.timezone || "UTC",
+    hour12: settings?.time_format === "12",
+  });
 }
 
 async function refreshHistory(reset = true) {

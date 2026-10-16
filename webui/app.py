@@ -10,6 +10,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -57,6 +58,8 @@ DEFAULT_RUNTIME_OPTIONS: dict[str, Any] = {
     "http_tracing": False,
     "max_history_videos": 1000,
     "record_video_history": True,
+    "timezone": "UTC",
+    "time_format": "24",
 }
 
 
@@ -96,6 +99,8 @@ class Settings(BaseModel):
     http_tracing: bool = False
     max_history_videos: int = Field(default=1000, ge=100, le=10000)
     record_video_history: bool = True
+    timezone: str = Field(default="UTC", min_length=1, max_length=64)
+    time_format: str = Field(default="24", pattern="^(12|24)$")
     sponsorblock_api_url: str = Field(
         default="https://sponsor.ajay.app/api/", min_length=1, max_length=2048
     )
@@ -115,6 +120,16 @@ class Settings(BaseModel):
         if not value.startswith(("https://", "http://")):
             raise ValueError("SponsorBlock API URL must start with http:// or https://")
         return value.rstrip("/") + "/"
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str) -> str:
+        value = value.strip()
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError("Choose a valid IANA time zone") from error
+        return value
 
     @model_validator(mode="after")
     def validate_whitelist(self) -> "Settings":
@@ -318,7 +333,14 @@ def save_config(settings: Settings) -> None:
     _write_json(
         DATA_DIR / "config.json",
         settings.model_dump(
-            exclude={"debug", "http_tracing", "max_history_videos", "record_video_history"}
+            exclude={
+                "debug",
+                "http_tracing",
+                "max_history_videos",
+                "record_video_history",
+                "timezone",
+                "time_format",
+            }
         ),
     )
     _write_json(
@@ -328,6 +350,8 @@ def save_config(settings: Settings) -> None:
             "http_tracing": settings.http_tracing,
             "max_history_videos": settings.max_history_videos,
             "record_video_history": settings.record_video_history,
+            "timezone": settings.timezone,
+            "time_format": settings.time_format,
         },
     )
     activity_store.set_history_limit(settings.max_history_videos)
@@ -521,7 +545,7 @@ async def delete_video_history() -> dict[str, bool]:
 
 @app.get("/api/stats", dependencies=[Depends(require_auth)])
 async def get_statistics() -> dict[str, Any]:
-    return activity_store.stats()
+    return activity_store.stats(load_runtime_options()["timezone"])
 
 
 @app.get("/api/now-playing", dependencies=[Depends(require_auth)])
