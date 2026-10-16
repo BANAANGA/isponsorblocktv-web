@@ -47,6 +47,8 @@
 
         <nav class="tabs" aria-label="Management sections">
           <button class="tab active" data-tab="settings" type="button">Settings</button>
+          <button class="tab" data-tab="history" type="button">Video history</button>
+          <button class="tab" data-tab="stats" type="button">Stats</button>
           <button class="tab" data-tab="logs" type="button">Logs <span id="log-count" class="count"></span></button>
         </nav>
 
@@ -123,6 +125,50 @@
               <button class="button button-primary" type="submit">Save settings</button>
             </div>
           </form>
+        </section>
+
+        <section id="history-tab" class="tab-content" hidden>
+          <div class="card">
+            <div class="card-heading">
+              <div><h2>Video history</h2><p>Videos observed while the service monitored your devices.</p></div>
+              <button id="refresh-history" class="button button-secondary" type="button">Refresh</button>
+            </div>
+            <div id="history-list" class="history-list"></div>
+            <div class="history-footer">
+              <span id="history-summary" class="empty-state"></span>
+              <button id="load-more-history" class="button button-quiet" type="button" hidden>Load more</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="stats-tab" class="tab-content" hidden>
+          <div id="stats-content">
+            <div class="stats-grid" id="total-stats"></div>
+            <div class="card">
+              <div class="card-heading"><div><h2>Last 30 days</h2><p>Recent viewing and skip activity.</p></div></div>
+              <div id="recent-stats" class="stats-grid stats-grid-compact"></div>
+            </div>
+            <div class="card">
+              <div class="card-heading"><div><h2>Skipped by category</h2><p>Count and estimated time saved for each SponsorBlock category.</p></div></div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead><tr><th>Category</th><th>Segments</th><th>Skip events</th><th>Time saved</th></tr></thead>
+                  <tbody id="category-stats"></tbody>
+                </table>
+              </div>
+              <p class="table-note">Category time can overlap when adjacent or overlapping segments are combined into one skip. The overall time-saved total counts each seek only once.</p>
+            </div>
+            <div class="stats-columns">
+              <div class="card">
+                <div class="card-heading"><div><h2>By device</h2><p>Playback skips attributed to each TV.</p></div></div>
+                <div id="device-stats" class="stats-list"></div>
+              </div>
+              <div class="card">
+                <div class="card-heading"><div><h2>Daily activity</h2><p>Time saved per day over the last 30 days.</p></div></div>
+                <div id="daily-stats" class="daily-chart"></div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="logs-tab" class="tab-content" hidden>

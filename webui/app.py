@@ -20,6 +20,8 @@ from iSponsorBlockTV.helpers import Config
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from starlette.middleware.sessions import SessionMiddleware
 
+from .activity import ActivityStore
+
 logger = logging.getLogger("isponsorblocktv.webui")
 
 DATA_DIR = Path(os.environ.get("ISPBTV_DATA_DIR", "./data")).expanduser().resolve()
@@ -184,7 +186,7 @@ class ServiceManager:
                 sys.executable,
                 "-u",
                 "-m",
-                "iSponsorBlockTV",
+                "webui.runner",
                 "--data",
                 str(DATA_DIR),
             ]
@@ -251,6 +253,7 @@ class ServiceManager:
 
 
 service = ServiceManager()
+activity_store = ActivityStore(DATA_DIR / "activity.sqlite3")
 login_attempts: dict[str, deque[float]] = defaultdict(deque)
 ADMIN_USERNAME = os.environ.get("WEB_USERNAME", "")
 ADMIN_PASSWORD = os.environ.get("WEB_PASSWORD", "")
@@ -448,6 +451,18 @@ async def get_logs(limit: int = 500) -> dict[str, Any]:
     if not 1 <= limit <= 5000:
         raise HTTPException(status_code=422, detail="Limit must be between 1 and 5000")
     return {"lines": list(service.log_lines)[-limit:], "status": service.status()}
+
+
+@app.get("/api/history", dependencies=[Depends(require_auth)])
+async def get_video_history(limit: int = 100, offset: int = 0) -> dict[str, Any]:
+    if not 1 <= limit <= 500 or offset < 0:
+        raise HTTPException(status_code=422, detail="Limit must be 1-500 and offset cannot be negative")
+    return activity_store.history(limit, offset)
+
+
+@app.get("/api/stats", dependencies=[Depends(require_auth)])
+async def get_statistics() -> dict[str, Any]:
+    return activity_store.stats()
 
 
 async def _upstream_api_helper() -> tuple[aiohttp.ClientSession, api_helpers.ApiHelper]:
