@@ -169,7 +169,14 @@
             <button id="refresh-stats" class="button button-secondary" type="button">Refresh stats</button>
           </div>
           <div class="stats-grid" id="total-stats"></div>
-            <div class="card">
+          <div class="card">
+            <div class="card-heading"><div><h2>Time watched vs skipped</h2><p>Watched time is estimated from forward playback position; skipped time uses recorded SponsorBlock skips.</p></div></div>
+            <div class="time-comparison-layout">
+              <div id="time-comparison-chart" class="category-pie time-comparison-chart" role="img" aria-label="Pie chart comparing watched and skipped time"></div>
+              <div id="time-comparison-legend" class="category-legend"></div>
+            </div>
+          </div>
+          <div class="card">
               <div class="card-heading"><div><h2>Last 30 days</h2><p>Recent viewing and skip activity.</p></div></div>
               <div id="recent-stats" class="stats-grid stats-grid-compact"></div>
             </div>
@@ -216,6 +223,6 @@
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=dashboard-now-playing" defer></script>
+    <script src="/static/app.js?v=watched-time-pie" defer></script>
   </body>
 </html>

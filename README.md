@@ -149,6 +149,9 @@ saved logs.
   category and device, skip events, and estimated time saved overall and over
   the last 30 days. The Dashboard tab is the first page shown after sign-in and
   includes a current playback widget and daily and category graphs.
+- Dashboard time comparison estimates watched time from forward playback
+  position changes and compares it with SponsorBlock skip durations. Older
+  playback sessions are not backfilled.
 - Activity is recorded from the time this version is installed; the upstream
   service does not provide older playback history to backfill. Video metadata
   is looked up using YouTube's public oEmbed endpoint.

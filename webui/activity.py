@@ -1,4 +1,5 @@
 import sqlite3
+import math
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -22,7 +23,8 @@ class ActivityStore:
                     device TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
-                    segment_count INTEGER NOT NULL DEFAULT 0
+                    segment_count INTEGER NOT NULL DEFAULT 0,
+                    watched_seconds REAL NOT NULL DEFAULT 0
                 );
                 CREATE INDEX IF NOT EXISTS video_history_started_at
                     ON video_history(started_at DESC);
@@ -59,6 +61,10 @@ class ActivityStore:
                     connection.execute(
                         f"ALTER TABLE video_history ADD COLUMN {name} TEXT NOT NULL DEFAULT ''"
                     )
+            if "watched_seconds" not in columns:
+                connection.execute(
+                    "ALTER TABLE video_history ADD COLUMN watched_seconds REAL NOT NULL DEFAULT 0"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -230,6 +236,23 @@ class ActivityStore:
                 (max(0, segment_count), video_id, device),
             )
 
+    def record_watch_time(self, video_id: str, device: str, seconds: float) -> None:
+        if not math.isfinite(seconds) or seconds <= 0:
+            return
+        with self._connection() as connection:
+            connection.execute(
+                """
+                UPDATE video_history
+                SET watched_seconds = watched_seconds + ?
+                WHERE id = (
+                    SELECT id FROM video_history
+                    WHERE video_id = ? AND device = ?
+                    ORDER BY started_at DESC LIMIT 1
+                )
+                """,
+                (seconds, video_id, device),
+            )
+
     def record_skip(
         self,
         video_id: str,
@@ -310,6 +333,9 @@ class ActivityStore:
                 """
             ).fetchone()
             video_count = connection.execute("SELECT COUNT(*) FROM video_history").fetchone()[0]
+            watched_seconds = connection.execute(
+                "SELECT COALESCE(SUM(watched_seconds), 0) FROM video_history"
+            ).fetchone()[0]
             devices = connection.execute(
                 """
                 SELECT device, COUNT(*) AS skip_events, SUM(segment_count) AS segments_skipped,
@@ -344,12 +370,17 @@ class ActivityStore:
             recent_videos = connection.execute(
                 "SELECT COUNT(*) FROM video_history WHERE started_at >= ?", (cutoff,)
             ).fetchone()[0]
+            recent_watched_seconds = connection.execute(
+                "SELECT COALESCE(SUM(watched_seconds), 0) FROM video_history WHERE started_at >= ?",
+                (cutoff,),
+            ).fetchone()[0]
         return {
             "totals": {
                 "videos_watched": video_count,
                 "skip_events": totals["skip_events"],
                 "segments_skipped": totals["segments_skipped"],
                 "seconds_saved": round(totals["seconds_saved"], 1),
+                "watched_seconds": round(watched_seconds, 1),
                 "time_saved_days": round(totals["seconds_saved"] / 86400, 2),
             },
             "last_30_days": {
@@ -357,6 +388,7 @@ class ActivityStore:
                 "skip_events": recent["skip_events"],
                 "segments_skipped": recent["segments_skipped"],
                 "seconds_saved": round(recent["seconds_saved"], 1),
+                "watched_seconds": round(recent_watched_seconds, 1),
             },
             "by_category": [dict(row) for row in categories],
             "by_device": [dict(row) for row in devices],

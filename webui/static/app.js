@@ -302,6 +302,37 @@ async function refreshStats() {
     renderMetric("Time saved", formatDuration(recent.seconds_saved)),
   ].join("");
 
+  const watchedSeconds = Math.max(0, Number(total.watched_seconds) || 0);
+  const skippedSeconds = Math.max(0, Number(total.seconds_saved) || 0);
+  const comparedSeconds = watchedSeconds + skippedSeconds;
+  const watchedPercent = comparedSeconds ? watchedSeconds / comparedSeconds * 100 : 0;
+  const skippedPercent = comparedSeconds ? skippedSeconds / comparedSeconds * 100 : 0;
+  const timeChart = document.querySelector("#time-comparison-chart");
+  const timeLegend = document.querySelector("#time-comparison-legend");
+  timeChart.style.background = comparedSeconds
+    ? `conic-gradient(#43c6db 0deg ${watchedPercent * 3.6}deg, #ff525b ${watchedPercent * 3.6}deg 360deg)`
+    : "conic-gradient(#35434f 0deg 360deg)";
+  timeChart.setAttribute(
+    "aria-label",
+    comparedSeconds
+      ? `Pie chart: ${formatDuration(watchedSeconds)} watched, ${formatDuration(skippedSeconds)} skipped`
+      : "No watched or skipped playback time has been recorded yet",
+  );
+  timeLegend.innerHTML = comparedSeconds
+    ? `<div class="category-legend-row">
+        <span class="category-swatch time-swatch-watched"></span>
+        <span class="category-legend-name">Watched</span>
+        <strong>${escapeHtml(formatDuration(watchedSeconds))}</strong>
+        <small>${watchedPercent.toFixed(1)}%</small>
+      </div>
+      <div class="category-legend-row">
+        <span class="category-swatch time-swatch-skipped"></span>
+        <span class="category-legend-name">Skipped</span>
+        <strong>${escapeHtml(formatDuration(skippedSeconds))}</strong>
+        <small>${skippedPercent.toFixed(1)}%</small>
+      </div>`
+    : '<div class="empty-state">Playback and skip-time data will appear here as the service runs.</div>';
+
   const categoryNames = {
     sponsor: "Sponsor",
     selfpromo: "Self promotion",
