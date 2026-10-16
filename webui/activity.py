@@ -36,7 +36,8 @@ class ActivityStore:
                     started_at TEXT NOT NULL,
                     last_seen_at TEXT NOT NULL,
                     segment_count INTEGER NOT NULL DEFAULT 0,
-                    watched_seconds REAL NOT NULL DEFAULT 0
+                    watched_seconds REAL NOT NULL DEFAULT 0,
+                    duration_seconds REAL NOT NULL DEFAULT 0
                 );
                 CREATE INDEX IF NOT EXISTS video_history_started_at
                     ON video_history(started_at DESC);
@@ -89,6 +90,10 @@ class ActivityStore:
                 connection.execute(
                     "ALTER TABLE video_history ADD COLUMN watched_seconds REAL NOT NULL DEFAULT 0"
                 )
+            if "duration_seconds" not in columns:
+                connection.execute(
+                    "ALTER TABLE video_history ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0"
+                )
             if not had_daily_watch_table:
                 connection.execute(
                     """
@@ -125,11 +130,15 @@ class ActivityStore:
         channel: str = "",
         channel_url: str = "",
         thumbnail_url: str = "",
+        duration_seconds: float = 0,
         *,
         now: datetime | None = None,
     ) -> None:
         if not self.record_video_history:
             return
+        duration_seconds = (
+            max(0.0, duration_seconds) if math.isfinite(duration_seconds) else 0.0
+        )
         timestamp = (now or datetime.now(UTC)).isoformat()
         with self._connection() as connection:
             recent = connection.execute(
@@ -148,7 +157,8 @@ class ActivityStore:
                         channel = COALESCE(NULLIF(?, ''), channel),
                         channel_url = COALESCE(NULLIF(?, ''), channel_url),
                         thumbnail_url = COALESCE(NULLIF(?, ''), thumbnail_url),
-                        last_seen_at = ?, segment_count = MAX(segment_count, ?)
+                        last_seen_at = ?, segment_count = MAX(segment_count, ?),
+                        duration_seconds = MAX(duration_seconds, ?)
                     WHERE id = ?
                     """,
                     (
@@ -159,6 +169,7 @@ class ActivityStore:
                         thumbnail_url,
                         timestamp,
                         segment_count,
+                        duration_seconds,
                         recent["id"],
                     ),
                 )
@@ -167,9 +178,9 @@ class ActivityStore:
                     """
                     INSERT INTO video_history (
                         video_id, title, channel, channel_url, thumbnail_url, device,
-                        started_at, last_seen_at, segment_count
+                        started_at, last_seen_at, segment_count, duration_seconds
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         video_id,
@@ -181,6 +192,7 @@ class ActivityStore:
                         timestamp,
                         timestamp,
                         segment_count,
+                        duration_seconds,
                     ),
                 )
             self._prune_history(connection)
@@ -406,7 +418,8 @@ class ActivityStore:
             rows = connection.execute(
                 """
                 SELECT video_id, title, channel, channel_url, thumbnail_url,
-                    device, started_at, last_seen_at, segment_count
+                    device, started_at, last_seen_at, segment_count,
+                    watched_seconds, duration_seconds
                 FROM video_history
                 WHERE (? = '' OR video_id LIKE ? ESCAPE '\\'
                     OR title LIKE ? ESCAPE '\\' OR channel LIKE ? ESCAPE '\\'
@@ -424,8 +437,18 @@ class ActivityStore:
                 """,
                 (search, pattern, pattern, pattern, pattern),
             ).fetchone()[0]
+        items = []
+        for row in rows:
+            item = dict(row)
+            duration = item["duration_seconds"]
+            item["viewed_percent"] = (
+                round(min(100.0, item["watched_seconds"] / duration * 100), 1)
+                if duration > 0
+                else None
+            )
+            items.append(item)
         return {
-            "items": [dict(row) for row in rows],
+            "items": items,
             "total": total,
             "limit": limit,
             "offset": offset,

@@ -245,6 +245,9 @@ async function refreshHistory(reset = true) {
         <small>${video.channel_url
           ? `<a class="history-channel" href="${escapeHtml(video.channel_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(video.channel || "Unknown channel")}</a>`
           : escapeHtml(video.channel || "Unknown channel")} · ${Number(video.segment_count) || 0} SponsorBlock segments found</small>
+        <small class="history-progress">${video.viewed_percent === null
+          ? "Viewed progress unavailable"
+          : `${Number(video.viewed_percent).toFixed(1)}% viewed`}</small>
       </div>
       <span class="history-device">${escapeHtml(video.device)}</span>
       <time datetime="${escapeHtml(video.started_at)}">${escapeHtml(formatDate(video.started_at))}</time>
