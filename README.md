@@ -147,8 +147,8 @@ saved logs.
 - Video history with direct YouTube links and statistics for watched videos,
   thumbnails, public video titles and channel names, skipped segments by
   category and device, skip events, and estimated time saved overall and over
-  the last 30 days. The Stats tab is the first page shown after sign-in and
-  includes daily and category graphs.
+  the last 30 days. The Dashboard tab is the first page shown after sign-in and
+  includes a current playback widget and daily and category graphs.
 - Activity is recorded from the time this version is installed; the upstream
   service does not provide older playback history to backfill. Video metadata
   is looked up using YouTube's public oEmbed endpoint.

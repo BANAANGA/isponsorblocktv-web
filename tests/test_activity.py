@@ -101,6 +101,35 @@ class ActivityStoreTests(unittest.TestCase):
         self.store.record_video("video-1", "video-1", "Living room", 2)
         self.assertEqual(self.store.history()["items"][0]["title"], "Resolved video title")
 
+    def test_now_playing_tracks_active_devices_and_uses_video_metadata(self) -> None:
+        now = datetime.now(UTC)
+        self.store.record_video(
+            "video-1",
+            "Current video",
+            "Living room",
+            0,
+            channel="Example channel",
+            thumbnail_url="https://example.com/thumb.jpg",
+            now=now,
+        )
+        self.store.set_now_playing("video-1", "Living room", playing=True, now=now)
+
+        current = self.store.now_playing()
+
+        self.assertEqual(len(current), 1)
+        self.assertEqual(current[0]["title"], "Current video")
+        self.assertEqual(current[0]["channel"], "Example channel")
+        self.assertEqual(current[0]["thumbnail_url"], "https://example.com/thumb.jpg")
+
+        self.store.set_now_playing("video-1", "Living room", playing=False)
+        self.assertEqual(self.store.now_playing(), [])
+
+    def test_now_playing_ignores_stale_playback_updates(self) -> None:
+        stale = datetime.now(UTC) - timedelta(minutes=5)
+        self.store.set_now_playing("video-1", "Living room", playing=True, now=stale)
+
+        self.assertEqual(self.store.now_playing(), [])
+
     def test_existing_activity_database_migrates_video_metadata_columns(self) -> None:
         legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
         with sqlite3.connect(legacy_path) as connection:

@@ -26,6 +26,11 @@ class ActivityStore:
                 );
                 CREATE INDEX IF NOT EXISTS video_history_started_at
                     ON video_history(started_at DESC);
+                CREATE TABLE IF NOT EXISTS now_playing (
+                    device TEXT PRIMARY KEY,
+                    video_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS skip_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     video_id TEXT NOT NULL,
@@ -159,6 +164,57 @@ class ActivityStore:
                 """,
                 (title, channel, channel_url, thumbnail_url, video_id, device),
             )
+
+    def set_now_playing(
+        self,
+        video_id: str,
+        device: str,
+        *,
+        playing: bool,
+        now: datetime | None = None,
+    ) -> None:
+        with self._connection() as connection:
+            if playing and video_id:
+                connection.execute(
+                    """
+                    INSERT INTO now_playing (device, video_id, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(device) DO UPDATE SET
+                        video_id = excluded.video_id,
+                        updated_at = excluded.updated_at
+                    """,
+                    (device, video_id, (now or datetime.now(UTC)).isoformat()),
+                )
+            else:
+                connection.execute("DELETE FROM now_playing WHERE device = ?", (device,))
+
+    def now_playing(self, *, max_age_seconds: int = 120) -> list[dict[str, Any]]:
+        cutoff = (datetime.now(UTC) - timedelta(seconds=max_age_seconds)).isoformat()
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT current.device, current.video_id, current.updated_at,
+                    COALESCE(history.title, current.video_id) AS title,
+                    COALESCE(history.channel, '') AS channel,
+                    COALESCE(history.channel_url, '') AS channel_url,
+                    COALESCE(history.thumbnail_url, '') AS thumbnail_url
+                FROM now_playing AS current
+                LEFT JOIN video_history AS history
+                    ON history.id = (
+                        SELECT id FROM video_history
+                        WHERE video_id = current.video_id AND device = current.device
+                        ORDER BY started_at DESC LIMIT 1
+                    )
+                WHERE current.updated_at >= ?
+                ORDER BY current.device
+                """,
+                (cutoff,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def clear_now_playing(self) -> None:
+        with self._connection() as connection:
+            connection.execute("DELETE FROM now_playing")
 
     def update_video_segment_count(self, video_id: str, device: str, segment_count: int) -> None:
         with self._connection() as connection:

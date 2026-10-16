@@ -72,11 +72,14 @@ async function showApp(token) {
   await refreshService();
   await refreshLogs();
   await refreshStats();
+  await refreshNowPlaying();
   clearInterval(logPolling);
   logPolling = setInterval(() => {
-    if (!document.querySelector("#auto-refresh")?.checked) return;
-    if (!document.querySelector("#logs-tab").hidden) refreshLogs();
+    if (document.querySelector("#auto-refresh")?.checked && !document.querySelector("#logs-tab").hidden) {
+      refreshLogs();
+    }
     refreshService();
+    refreshNowPlaying();
   }, 3000);
 }
 
@@ -258,6 +261,30 @@ function renderMetric(label, value, detail = "") {
   return `<article class="metric-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</article>`;
 }
 
+async function refreshNowPlaying() {
+  const content = document.querySelector("#now-playing-content");
+  try {
+    const result = await api("/api/now-playing");
+    content.innerHTML = result.items.length
+      ? result.items.map((item) => `
+        <article class="now-playing-item">
+          <a class="now-playing-thumbnail" href="https://www.youtube.com/watch?v=${encodeURIComponent(item.video_id)}" target="_blank" rel="noopener noreferrer" aria-label="Watch ${escapeHtml(item.title)}">
+            <img src="${escapeHtml(item.thumbnail_url || `https://i.ytimg.com/vi/${encodeURIComponent(item.video_id)}/hqdefault.jpg`)}" alt="" loading="lazy">
+            <span class="play-icon" aria-hidden="true">▶</span>
+          </a>
+          <div class="now-playing-details">
+            <span class="now-playing-indicator"><span></span> PLAYING</span>
+            <a class="now-playing-title" href="https://www.youtube.com/watch?v=${encodeURIComponent(item.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title || item.video_id)}</a>
+            <span class="now-playing-channel">${escapeHtml(item.channel || "Unknown channel")}</span>
+            <span class="now-playing-device">${escapeHtml(item.device)}</span>
+          </div>
+        </article>`).join("")
+      : '<div class="empty-state">Nothing is currently playing.</div>';
+  } catch (error) {
+    content.textContent = `Could not load current playback: ${error.message}`;
+  }
+}
+
 async function refreshStats() {
   const stats = await api("/api/stats");
   const total = stats.totals;
@@ -318,10 +345,10 @@ async function refreshStats() {
       "aria-label",
       `Pie chart of ${totalSegments} skipped segments across ${slices.length} categories`,
     );
-    legend.innerHTML = slices.map((item) => {
+    legend.innerHTML = slices.map((item, index) => {
       const name = categoryNames[item.category] || item.category;
       return `<div class="category-legend-row">
-        <span class="category-swatch" style="--slice-color:${item.color}"></span>
+        <span class="category-swatch category-swatch-${index % palette.length}"></span>
         <span class="category-legend-name">${escapeHtml(name)}</span>
         <strong>${Number(item.segments_skipped) || 0}</strong>
         <small>${item.percent.toFixed(1)}%</small>
@@ -585,7 +612,9 @@ document.querySelectorAll(".tab").forEach((tab) => {
     try {
       if (tab.dataset.tab === "logs") await refreshLogs();
       if (tab.dataset.tab === "history") await refreshHistory();
-      if (tab.dataset.tab === "stats") await refreshStats();
+      if (tab.dataset.tab === "dashboard") {
+        await Promise.all([refreshStats(), refreshNowPlaying()]);
+      }
     } catch (error) {
       notify(error.message, true);
     }
@@ -597,9 +626,9 @@ async function initialize() {
     const state = await api("/api/auth/status");
     if (state.authenticated) {
       await showApp(state.csrf_token);
-      document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === "stats"));
+      document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item.dataset.tab === "dashboard"));
       document.querySelectorAll(".tab-content").forEach((section) => {
-        section.hidden = section.id !== "stats-tab";
+        section.hidden = section.id !== "dashboard-tab";
       });
     }
     else showLogin();
