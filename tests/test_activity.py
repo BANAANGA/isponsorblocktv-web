@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -70,6 +71,47 @@ class ActivityStoreTests(unittest.TestCase):
         reopened = ActivityStore(self.store.path)
 
         self.assertEqual(reopened.history()["total"], 1)
+
+    def test_video_history_stores_public_channel_and_thumbnail_metadata(self) -> None:
+        self.store.record_video(
+            "video-1",
+            "Resolved video title",
+            "Living room",
+            2,
+            channel="Example channel",
+            channel_url="https://www.youtube.com/@example",
+            thumbnail_url="https://i.ytimg.com/vi/video-1/hqdefault.jpg",
+        )
+
+        video = self.store.history()["items"][0]
+
+        self.assertEqual(video["channel"], "Example channel")
+        self.assertEqual(video["channel_url"], "https://www.youtube.com/@example")
+        self.assertEqual(video["thumbnail_url"], "https://i.ytimg.com/vi/video-1/hqdefault.jpg")
+        self.store.record_video("video-1", "video-1", "Living room", 2)
+        self.assertEqual(self.store.history()["items"][0]["title"], "Resolved video title")
+
+    def test_existing_activity_database_migrates_video_metadata_columns(self) -> None:
+        legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE video_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    video_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    device TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    segment_count INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+
+        migrated = ActivityStore(legacy_path)
+        migrated.record_video("video-1", "Title", "Living room", 0)
+
+        self.assertEqual(migrated.history()["items"][0]["channel"], "")
 
 
 class SegmentIntervalTests(unittest.TestCase):

@@ -2,6 +2,7 @@ import asyncio
 import copy
 import logging
 import sys
+from urllib.parse import quote
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -65,11 +66,8 @@ def install_activity_hooks(store: ActivityStore) -> None:
         segments = await original_get_segments(self, video_id)
         for listener in getattr(self, "_webui_listeners", []):
             if getattr(listener, "_webui_current_video_id", None) == video_id:
-                store.record_video(
-                    video_id,
-                    listener._webui_title,
-                    listener.name,
-                    len(segments),
+                store.update_video_segment_count(
+                    video_id, listener.name, len(segments)
                 )
         return segments
 
@@ -77,25 +75,46 @@ def install_activity_hooks(store: ActivityStore) -> None:
 
     original_process_playstatus = upstream_main.DeviceListener.process_playstatus
 
+    async def update_video_metadata(listener: Any, video_id: str) -> None:
+        thumbnail_url = f"https://i.ytimg.com/vi/{quote(video_id, safe='')}/hqdefault.jpg"
+        try:
+            async with listener.web_session.get(
+                "https://www.youtube.com/oembed",
+                params={
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "format": "json",
+                },
+                timeout=5,
+            ) as response:
+                if response.status != 200:
+                    return
+                metadata = await response.json()
+            store.update_video_metadata(
+                video_id=video_id,
+                device=listener.name,
+                title=str(metadata.get("title") or video_id),
+                channel=str(metadata.get("author_name") or ""),
+                channel_url=str(metadata.get("author_url") or ""),
+                thumbnail_url=str(metadata.get("thumbnail_url") or thumbnail_url),
+            )
+        except Exception:
+            listener.logger.debug("Could not retrieve YouTube metadata for %s", video_id, exc_info=True)
+
     async def process_playstatus(self, state: Any, time_start: float):
         video_id = getattr(state, "videoId", "") or ""
         is_playing = getattr(getattr(state, "state", None), "value", None) == 1
         if video_id and is_playing:
-            title = next(
-                (
-                    str(value)
-                    for name in ("videoTitle", "title", "video_title")
-                    if (value := getattr(state, name, None))
-                ),
-                video_id,
-            )
             self._webui_current_video_id = video_id
-            self._webui_title = title
             self.api_helper._webui_listeners = getattr(
                 self.api_helper, "_webui_listeners", set()
             )
             self.api_helper._webui_listeners.add(self)
-            store.record_video(video_id, title, self.name, 0)
+            store.record_video(video_id, video_id, self.name, 0)
+            if getattr(self, "_webui_metadata_video_id", None) != video_id:
+                self._webui_metadata_video_id = video_id
+                self._webui_metadata_task = asyncio.create_task(
+                    update_video_metadata(self, video_id)
+                )
         return await original_process_playstatus(self, state, time_start)
 
     upstream_main.DeviceListener.process_playstatus = process_playstatus
