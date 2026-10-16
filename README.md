@@ -6,6 +6,12 @@ keeps its configuration and logs in one place. The upstream service remains
 responsible for playback monitoring, SponsorBlock segment handling, ad muting
 and skipping, and device communication.
 
+## Dashboard preview
+
+![iSponsorBlockTV Web statistics dashboard](docs/screenshots/dashboard.png)
+
+The screenshot uses sample activity to illustrate the statistics dashboard.
+
 ## Install with Docker Compose
 
 ### One-line install
