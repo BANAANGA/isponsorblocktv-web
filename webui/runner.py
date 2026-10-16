@@ -1,7 +1,9 @@
 import asyncio
 import copy
 import logging
+import math
 import sys
+import time
 from urllib.parse import quote
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -11,6 +13,21 @@ from iSponsorBlockTV import api_helpers, main as upstream_main
 from iSponsorBlockTV.helpers import app_start
 
 from .activity import ActivityStore
+
+
+def _observed_watch_seconds(
+    previous: tuple[str, bool, float, float] | None,
+    video_id: str,
+    position: float,
+    observed_at: float,
+) -> float:
+    if not previous or previous[0] != video_id or not previous[1]:
+        return 0.0
+    elapsed = observed_at - previous[3]
+    advanced = position - previous[2]
+    if not math.isfinite(elapsed) or not math.isfinite(advanced):
+        return 0.0
+    return min(max(0.0, elapsed), max(0.0, advanced))
 
 
 def _interval_seconds(intervals: list[tuple[float, float]]) -> float:
@@ -103,6 +120,15 @@ def install_activity_hooks(store: ActivityStore) -> None:
     async def process_playstatus(self, state: Any, time_start: float):
         video_id = getattr(state, "videoId", "") or ""
         is_playing = getattr(getattr(state, "state", None), "value", None) == 1
+        try:
+            position = float(getattr(state, "currentTime", 0) or 0)
+        except (TypeError, ValueError):
+            position = 0.0
+        previous = getattr(self, "_webui_last_playback", None)
+        watched_seconds = _observed_watch_seconds(previous, video_id, position, time_start)
+        if watched_seconds:
+            store.record_watch_time(video_id, self.name, watched_seconds)
+        self._webui_last_playback = (video_id, is_playing, position, time_start)
         store.set_now_playing(video_id, self.name, playing=is_playing)
         if video_id and is_playing:
             self._webui_current_video_id = video_id
@@ -125,6 +151,16 @@ def install_activity_hooks(store: ActivityStore) -> None:
     async def skip(self, time_to: float, position: float, uuids: list[str]):
         await original_skip(self, time_to, position, uuids)
         current_video_id = getattr(self, "_webui_current_video_id", "")
+        if current_video_id:
+            store.record_watch_time(current_video_id, self.name, max(0.0, time_to))
+        current_playback = getattr(self, "_webui_last_playback", None)
+        if current_playback and current_playback[1]:
+            self._webui_last_playback = (
+                current_playback[0],
+                True,
+                float(position),
+                time.monotonic(),
+            )
         candidates = getattr(self, "_webui_segments", [])
         skipped = next(
             (segment for segment in candidates if set(uuids).intersection(segment.get("UUID", []))),

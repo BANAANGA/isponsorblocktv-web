@@ -135,6 +135,10 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .category-legend-name { color: var(--text); }
 .category-legend-row strong, .category-legend-row small { color: var(--muted); font-size: 11px; text-align: right; }
 .category-pie-layout .empty-state { grid-column: 1 / -1; }
+.time-comparison-layout { display: grid; grid-template-columns: minmax(150px, 240px) minmax(250px, 1fr); align-items: center; gap: 30px; padding: 4px 8px 8px; }
+.time-comparison-chart { width: min(100%, 200px); }
+.time-swatch-watched { background: #43c6db; }
+.time-swatch-skipped { background: #ff525b; }
 .now-playing-card { margin-bottom: 16px; }
 .now-playing-card .card-heading { margin-bottom: 12px; }
 .now-playing-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; }
@@ -185,6 +189,8 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .category-pie-layout { grid-template-columns: 1fr; gap: 20px; padding-inline: 0; }
   .category-pie { width: min(65vw, 220px); }
+  .time-comparison-layout { grid-template-columns: 1fr; gap: 20px; padding-inline: 0; }
+  .time-comparison-chart { width: min(65vw, 200px); }
   .stats-columns { grid-template-columns: 1fr; gap: 0; }
   .history-row { grid-template-columns: 112px minmax(0, 1fr); }
   .history-thumbnail { grid-row: span 2; }

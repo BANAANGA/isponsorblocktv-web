@@ -6,7 +6,7 @@ from pathlib import Path
 
 from iSponsorBlockTV.api_helpers import ApiHelper
 from webui.activity import ActivityStore
-from webui.runner import _interval_seconds, install_activity_hooks
+from webui.runner import _interval_seconds, _observed_watch_seconds, install_activity_hooks
 
 
 class ActivityStoreTests(unittest.TestCase):
@@ -61,6 +61,7 @@ class ActivityStoreTests(unittest.TestCase):
             {"sponsor": 20, "intro": 10},
             now=now,
         )
+        self.store.record_watch_time("video-1", "Living room", 120)
 
         stats = self.store.stats()
 
@@ -68,7 +69,9 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertEqual(stats["totals"]["skip_events"], 1)
         self.assertEqual(stats["totals"]["segments_skipped"], 2)
         self.assertEqual(stats["totals"]["seconds_saved"], 30)
+        self.assertEqual(stats["totals"]["watched_seconds"], 120)
         self.assertEqual(stats["last_30_days"]["skip_events"], 1)
+        self.assertEqual(stats["last_30_days"]["watched_seconds"], 120)
         self.assertEqual(
             {item["category"]: item["segments_skipped"] for item in stats["by_category"]},
             {"intro": 1, "sponsor": 1},
@@ -151,9 +154,21 @@ class ActivityStoreTests(unittest.TestCase):
         migrated.record_video("video-1", "Title", "Living room", 0)
 
         self.assertEqual(migrated.history()["items"][0]["channel"], "")
+        with sqlite3.connect(legacy_path) as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(video_history)")}
+        self.assertIn("watched_seconds", columns)
 
 
 class SegmentIntervalTests(unittest.TestCase):
+    def test_watched_time_uses_only_forward_playback_position(self) -> None:
+        playing = ("video-1", True, 10.0, 100.0)
+
+        self.assertEqual(_observed_watch_seconds(playing, "video-1", 18.0, 108.0), 8.0)
+        self.assertEqual(_observed_watch_seconds(playing, "video-1", 30.0, 108.0), 8.0)
+        self.assertEqual(_observed_watch_seconds(playing, "video-1", 5.0, 108.0), 0.0)
+        self.assertEqual(_observed_watch_seconds(playing, "video-2", 18.0, 108.0), 0.0)
+        self.assertEqual(_observed_watch_seconds(("video-1", False, 10.0, 100.0), "video-1", 18.0, 108.0), 0.0)
+
     def test_category_duration_unions_overlapping_segments(self) -> None:
         self.assertEqual(_interval_seconds([(0, 10), (5, 15), (20, 22)]), 17)
 
