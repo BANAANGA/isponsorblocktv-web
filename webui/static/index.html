@@ -47,7 +47,7 @@
         </div>
 
         <nav class="tabs" aria-label="Management sections">
-          <button class="tab active" data-tab="stats" type="button">Stats</button>
+          <button class="tab active" data-tab="dashboard" type="button">Dashboard</button>
           <button class="tab" data-tab="history" type="button">Video history</button>
           <button class="tab" data-tab="logs" type="button">Logs <span id="log-count" class="count"></span></button>
           <button class="tab" data-tab="settings" type="button">Settings</button>
@@ -154,8 +154,16 @@
           </div>
         </section>
 
-        <section id="stats-tab" class="tab-content">
+        <section id="dashboard-tab" class="tab-content">
           <div id="stats-content">
+          <div id="now-playing" class="card now-playing-card">
+            <div class="card-heading">
+              <div><h2>Now playing</h2><p>Current playback across your paired devices.</p></div>
+            </div>
+            <div id="now-playing-content" class="now-playing-content">
+              <div class="empty-state">Nothing is currently playing.</div>
+            </div>
+          </div>
           <div class="card-heading stats-heading">
             <div><h2>Activity overview</h2><p>Your viewing and SponsorBlock statistics.</p></div>
             <button id="refresh-stats" class="button button-secondary" type="button">Refresh stats</button>
@@ -208,6 +216,6 @@
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=history-search-logo-logs" defer></script>
+    <script src="/static/app.js?v=dashboard-now-playing" defer></script>
   </body>
 </html>

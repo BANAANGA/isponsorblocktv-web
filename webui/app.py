@@ -468,6 +468,13 @@ async def get_statistics() -> dict[str, Any]:
     return activity_store.stats()
 
 
+@app.get("/api/now-playing", dependencies=[Depends(require_auth)])
+async def get_now_playing() -> dict[str, Any]:
+    if not service.status()["running"]:
+        return {"items": []}
+    return {"items": activity_store.now_playing()}
+
+
 async def _upstream_api_helper() -> tuple[aiohttp.ClientSession, api_helpers.ApiHelper]:
     settings = Config(str(DATA_DIR))
     session = aiohttp.ClientSession(trust_env=settings.use_proxy)

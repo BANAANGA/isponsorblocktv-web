@@ -103,6 +103,7 @@ def install_activity_hooks(store: ActivityStore) -> None:
     async def process_playstatus(self, state: Any, time_start: float):
         video_id = getattr(state, "videoId", "") or ""
         is_playing = getattr(getattr(state, "state", None), "value", None) == 1
+        store.set_now_playing(video_id, self.name, playing=is_playing)
         if video_id and is_playing:
             self._webui_current_video_id = video_id
             self.api_helper._webui_listeners = getattr(
