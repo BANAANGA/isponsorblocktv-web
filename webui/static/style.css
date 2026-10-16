@@ -83,16 +83,23 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .log-card { padding-bottom: 16px; }
 .log-actions { flex-wrap: wrap; justify-content: flex-end; }
 .toggle-label { flex-direction: row; align-items: center; }
-.log-output { height: min(65vh, 640px); min-height: 300px; overflow: auto; padding: 8px 14px; border: 1px solid #263847; border-radius: 10px; color: #c3d4df; background: #081016; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.log-entry { display: grid; grid-template-columns: 190px 72px minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1a2832; }
-.log-entry:last-child { border-bottom: 0; }
-.log-entry time { color: #8297a6; white-space: nowrap; }
+.log-output { height: min(65vh, 640px); min-height: 300px; overflow: auto; border: 1px solid #263847; border-radius: 10px; color: #c3d4df; background: #081016; font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.log-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.log-table th { position: sticky; top: 0; z-index: 1; padding: 0; border-bottom: 1px solid #304453; background: #111b25; text-align: left; }
+.log-table th:nth-child(1) { width: 220px; }
+.log-table th:nth-child(2) { width: 100px; }
+.log-table th:nth-child(3) { width: 200px; }
+.log-sort { width: 100%; padding: 10px 12px; border: 0; color: var(--muted); background: transparent; font-size: 11px; font-weight: 700; text-align: left; }
+.log-sort:hover, .log-sort.active { color: var(--text); }
+.log-table td { padding: 7px 12px; border-bottom: 1px solid #1a2832; vertical-align: top; }
+.log-table tr:last-child td { border-bottom: 0; }
+.log-table td time { color: #8297a6; white-space: nowrap; }
 .log-level { color: #9bafbe; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
 .log-message { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .log-warning .log-level { color: #ffd178; }
 .log-error .log-level, .log-critical .log-level { color: var(--danger); }
 .log-debug .log-level { color: #98c9ff; }
-.log-empty { padding: 12px 0; color: var(--muted); }
+.log-empty { padding: 12px; color: var(--muted); }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .stats-grid-compact { margin-bottom: 0; }
 .stats-heading { align-items: center; }
@@ -183,6 +190,10 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .now-playing-title { overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .now-playing-title:hover { color: var(--accent); }
 .now-playing-channel, .now-playing-device { color: var(--muted); font-size: 11px; }
+.now-playing-progress { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+.now-playing-progress progress { width: 100%; height: 7px; accent-color: var(--accent); }
+.now-playing-progress-label { color: var(--muted); font-size: 11px; }
+.play-video-form { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1.5fr) auto; align-items: end; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .history-list { display: grid; }
 .history-row { display: grid; grid-template-columns: 144px minmax(0, 1fr) minmax(100px, .4fr) minmax(140px, .5fr); align-items: center; gap: 14px; padding: 15px 4px; border-bottom: 1px solid #20303c; }
 .history-row:last-child { border-bottom: 0; }
@@ -231,12 +242,12 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
   .history-device { text-align: left; }
   .history-row time { grid-column: 1 / -1; text-align: left; }
   .now-playing-item { grid-template-columns: 112px minmax(0, 1fr); }
+  .play-video-form { grid-template-columns: 1fr; }
   .pair-row { align-items: stretch; flex-direction: column; }
   .device-row { align-items: stretch; flex-wrap: wrap; }
   .device-row label { min-width: calc(50% - 8px); }
   .device-row .offset-label { max-width: unset; }
   .log-actions { justify-content: flex-start; }
-  .log-entry { grid-template-columns: minmax(0, 1fr) 64px; gap: 3px 10px; }
-  .log-entry time { grid-column: 1 / -1; }
-  .log-message { grid-column: 1 / -1; }
+  .log-table { min-width: 760px; }
+  .log-table th:nth-child(1) { width: 180px; }
 }

@@ -60,7 +60,10 @@ class ActivityStore:
                 );
                 CREATE TABLE IF NOT EXISTS now_playing (
                     device TEXT PRIMARY KEY,
+                    screen_id TEXT NOT NULL DEFAULT '',
                     video_id TEXT NOT NULL,
+                    position_seconds REAL NOT NULL DEFAULT 0,
+                    duration_seconds REAL NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS skip_events (
@@ -99,6 +102,19 @@ class ActivityStore:
                 connection.execute(
                     "ALTER TABLE video_history ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0"
                 )
+            now_playing_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(now_playing)").fetchall()
+            }
+            for name, declaration in (
+                ("screen_id", "TEXT NOT NULL DEFAULT ''"),
+                ("position_seconds", "REAL NOT NULL DEFAULT 0"),
+                ("duration_seconds", "REAL NOT NULL DEFAULT 0"),
+            ):
+                if name not in now_playing_columns:
+                    connection.execute(
+                        f"ALTER TABLE now_playing ADD COLUMN {name} {declaration}"
+                    )
             if not had_daily_watch_table:
                 connection.execute(
                     """
@@ -262,19 +278,44 @@ class ActivityStore:
         device: str,
         *,
         playing: bool,
+        screen_id: str = "",
+        position_seconds: float = 0,
+        duration_seconds: float = 0,
         now: datetime | None = None,
     ) -> None:
+        position_seconds = (
+            max(0.0, position_seconds)
+            if math.isfinite(position_seconds) and position_seconds > 0
+            else 0.0
+        )
+        duration_seconds = (
+            max(0.0, duration_seconds)
+            if math.isfinite(duration_seconds) and duration_seconds > 0
+            else 0.0
+        )
         with self._connection() as connection:
             if playing and video_id:
                 connection.execute(
                     """
-                    INSERT INTO now_playing (device, video_id, updated_at)
-                    VALUES (?, ?, ?)
+                    INSERT INTO now_playing (
+                        device, screen_id, video_id, position_seconds, duration_seconds, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(device) DO UPDATE SET
+                        screen_id = excluded.screen_id,
                         video_id = excluded.video_id,
+                        position_seconds = excluded.position_seconds,
+                        duration_seconds = excluded.duration_seconds,
                         updated_at = excluded.updated_at
                     """,
-                    (device, video_id, (now or datetime.now(UTC)).isoformat()),
+                    (
+                        device,
+                        screen_id,
+                        video_id,
+                        position_seconds,
+                        duration_seconds,
+                        (now or datetime.now(UTC)).isoformat(),
+                    ),
                 )
             else:
                 connection.execute("DELETE FROM now_playing WHERE device = ?", (device,))
@@ -284,7 +325,8 @@ class ActivityStore:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT current.device, current.video_id, current.updated_at,
+                SELECT current.device, current.screen_id, current.video_id,
+                    current.position_seconds, current.duration_seconds, current.updated_at,
                     COALESCE(history.title, current.video_id) AS title,
                     COALESCE(history.channel, '') AS channel,
                     COALESCE(history.channel_url, '') AS channel_url,
@@ -301,7 +343,15 @@ class ActivityStore:
                 """,
                 (cutoff,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        items = [dict(row) for row in rows]
+        for item in items:
+            duration = item["duration_seconds"]
+            item["viewed_percent"] = (
+                round(min(100.0, item["position_seconds"] / duration * 100), 1)
+                if duration > 0
+                else None
+            )
+        return items
 
     def clear_now_playing(self) -> None:
         with self._connection() as connection:
