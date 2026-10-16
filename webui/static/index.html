@@ -183,6 +183,15 @@
             <div id="now-playing-content" class="now-playing-content">
               <div class="empty-state">Nothing is currently playing.</div>
             </div>
+            <form id="play-video-form" class="play-video-form">
+              <label>Play on
+                <select name="screen_id" required></select>
+              </label>
+              <label>YouTube video URL or ID
+                <input name="video" type="text" maxlength="2048" placeholder="https://youtu.be/... or video ID" required>
+              </label>
+              <button class="button button-primary" type="submit">Play video</button>
+            </form>
           </div>
           <div class="card-heading stats-heading">
             <div><h2>Activity overview</h2><p>Your viewing and SponsorBlock statistics.</p></div>
@@ -253,12 +262,24 @@
                 <button id="delete-logs" class="button button-danger" type="button">Delete logs</button>
               </div>
             </div>
-            <div id="log-output" class="log-output" role="log" aria-live="polite">Loading logs...</div>
+            <div id="log-output" class="log-output" role="region" aria-label="Service log entries" aria-live="polite">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-log-sort="timestamp" aria-sort="descending"><button type="button" class="log-sort active" data-log-sort="timestamp">Timestamp <span aria-hidden="true">↓</span></button></th>
+                    <th scope="col" data-log-sort="level" aria-sort="none"><button type="button" class="log-sort" data-log-sort="level">Level</button></th>
+                    <th scope="col" data-log-sort="source" aria-sort="none"><button type="button" class="log-sort" data-log-sort="source">Source</button></th>
+                    <th scope="col" data-log-sort="message" aria-sort="none"><button type="button" class="log-sort" data-log-sort="message">Message</button></th>
+                  </tr>
+                </thead>
+                <tbody id="log-entries"><tr><td class="log-empty" colspan="4">Loading logs...</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </section>
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=history-retention-more-stats" defer></script>
+    <script src="/static/app.js?v=sortable-log-columns" defer></script>
   </body>
 </html>

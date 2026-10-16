@@ -268,7 +268,15 @@ class ActivityStoreTests(unittest.TestCase):
             thumbnail_url="https://example.com/thumb.jpg",
             now=now,
         )
-        self.store.set_now_playing("video-1", "Living room", playing=True, now=now)
+        self.store.set_now_playing(
+            "video-1",
+            "Living room",
+            playing=True,
+            screen_id="screen-1",
+            position_seconds=45,
+            duration_seconds=180,
+            now=now,
+        )
 
         current = self.store.now_playing()
 
@@ -276,6 +284,8 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertEqual(current[0]["title"], "Current video")
         self.assertEqual(current[0]["channel"], "Example channel")
         self.assertEqual(current[0]["thumbnail_url"], "https://example.com/thumb.jpg")
+        self.assertEqual(current[0]["screen_id"], "screen-1")
+        self.assertEqual(current[0]["viewed_percent"], 25)
 
         self.store.set_now_playing("video-1", "Living room", playing=False)
         self.assertEqual(self.store.now_playing(), [])
@@ -289,6 +299,15 @@ class ActivityStoreTests(unittest.TestCase):
     def test_existing_activity_database_migrates_video_metadata_columns(self) -> None:
         legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
         with sqlite3.connect(legacy_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE now_playing (
+                    device TEXT PRIMARY KEY,
+                    video_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             connection.execute(
                 """
                 CREATE TABLE video_history (
@@ -311,6 +330,13 @@ class ActivityStoreTests(unittest.TestCase):
             columns = {row[1] for row in connection.execute("PRAGMA table_info(video_history)")}
         self.assertIn("watched_seconds", columns)
         self.assertIn("duration_seconds", columns)
+        with sqlite3.connect(legacy_path) as connection:
+            now_playing_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(now_playing)")
+            }
+        self.assertTrue(
+            {"screen_id", "position_seconds", "duration_seconds"}.issubset(now_playing_columns)
+        )
 
     def test_activity_migration_backfills_daily_watch_totals(self) -> None:
         legacy_path = Path(self.temporary_directory.name) / "watched.sqlite3"

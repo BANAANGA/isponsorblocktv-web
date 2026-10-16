@@ -170,8 +170,9 @@ saved logs.
   YouTube channel whitelist and API key, proxy setting, and SponsorBlock API
   URL, plus upstream debug logging and HTTP tracing switches.
 - Start/stop controls and a live-refreshing log viewer for the upstream
-  service, with log persistence, rotation, and a control to permanently delete
-  saved logs.
+  service, with sortable timestamp, level, source, and message columns ordered
+  newest first by default, log persistence, rotation, and a control to
+  permanently delete saved logs.
 - Video history with direct YouTube links and an estimated viewed percentage
   based on observed playback time and the duration reported by the TV device.
   The percentage is capped at 100%; unavailable durations are shown as such.
@@ -179,8 +180,10 @@ saved logs.
   thumbnails, public video titles and channel names, skipped segments by
   category and device, skip events, and estimated time saved overall and over
   the last 30 days. The Dashboard tab is the first page shown after sign-in and
-  includes a current playback widget, watched-versus-skipped and category pie
-  charts, daily time comparisons, and a most-watched videos graph.
+  includes a current playback widget with watched percentage, pause controls,
+  and a form to start a video on a paired device using its YouTube URL or ID,
+  plus watched-versus-skipped and category pie charts, daily time comparisons,
+  and a most-watched videos graph.
 - Configure the maximum number of retained video-history entries (100 to
   10,000); oldest entries are automatically removed. Delete viewing history
   and its related activity statistics from the Settings tab when needed.

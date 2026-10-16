@@ -19,9 +19,17 @@ from fastapi.staticfiles import StaticFiles
 from iSponsorBlockTV import api_helpers
 from iSponsorBlockTV.helpers import Config
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pyytlounge import YtLoungeApi
+from pyytlounge.exceptions import (
+    NotConnectedException,
+    NotLinkedException,
+    NotPairedException,
+    NotSupportedException,
+)
 from starlette.middleware.sessions import SessionMiddleware
 
 from .activity import ActivityStore
+from .youtube import extract_youtube_video_id
 
 logger = logging.getLogger("isponsorblocktv.webui")
 
@@ -150,6 +158,21 @@ class PairPayload(BaseModel):
 
 class ChannelSearchPayload(BaseModel):
     query: str = Field(min_length=1, max_length=200)
+
+
+class DeviceControlPayload(BaseModel):
+    screen_id: str = Field(min_length=1, max_length=512)
+
+    @field_validator("screen_id")
+    @classmethod
+    def screen_id_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Screen ID cannot be empty")
+        return value.strip()
+
+
+class PlayVideoPayload(DeviceControlPayload):
+    video: str = Field(min_length=1, max_length=2048)
 
 
 def _session_secret() -> str:
@@ -553,6 +576,79 @@ async def get_now_playing() -> dict[str, Any]:
     if not service.status()["running"]:
         return {"items": []}
     return {"items": activity_store.now_playing()}
+
+
+async def _send_device_command(screen_id: str, *, action: str, video_id: str = "") -> None:
+    configured = load_config()
+    if not any(device.get("screen_id") == screen_id for device in configured["devices"]):
+        raise HTTPException(status_code=404, detail="The selected device is not configured")
+
+    client = YtLoungeApi(configured["join_name"], logger=logger)
+    client.auth.screen_id = screen_id
+    client.conn = aiohttp.TCPConnector(ttl_dns_cache=300)
+    client.session = aiohttp.ClientSession(
+        connector=client.conn,
+        trust_env=bool(configured.get("use_proxy", False)),
+    )
+    try:
+        async with asyncio.timeout(20):
+            if not await client.refresh_auth():
+                raise HTTPException(
+                    status_code=502,
+                    detail="Could not authenticate with the selected TV",
+                )
+            if not await client.is_available():
+                raise HTTPException(status_code=503, detail="The selected TV is not available")
+            if not await client.connect():
+                raise HTTPException(status_code=503, detail="Could not connect to the selected TV")
+            succeeded = (
+                await client.pause()
+                if action == "pause"
+                else await client.play_video(video_id)
+            )
+            if not succeeded:
+                raise HTTPException(
+                    status_code=502,
+                    detail="The TV did not accept the playback command",
+                )
+            await client.disconnect()
+    except HTTPException:
+        raise
+    except (
+        NotConnectedException,
+        NotLinkedException,
+        NotPairedException,
+        NotSupportedException,
+    ) as error:
+        logger.warning("TV %s could not handle the %s command: %s", screen_id, action, error)
+        raise HTTPException(
+            status_code=503,
+            detail=f"The selected TV could not handle the command: {error}",
+        ) from error
+    except (aiohttp.ClientError, TimeoutError) as error:
+        logger.exception("Could not send %s command to TV %s", action, screen_id)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not send command to the TV: {error}",
+        ) from error
+    finally:
+        await client.close()
+
+
+@app.post("/api/devices/pause", dependencies=[Depends(require_csrf)])
+async def pause_device(payload: DeviceControlPayload) -> dict[str, bool]:
+    await _send_device_command(payload.screen_id, action="pause")
+    return {"success": True}
+
+
+@app.post("/api/devices/play-video", dependencies=[Depends(require_csrf)])
+async def play_video_on_device(payload: PlayVideoPayload) -> dict[str, bool]:
+    try:
+        video_id = extract_youtube_video_id(payload.video)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    await _send_device_command(payload.screen_id, action="play-video", video_id=video_id)
+    return {"success": True}
 
 
 async def _upstream_api_helper() -> tuple[aiohttp.ClientSession, api_helpers.ApiHelper]:

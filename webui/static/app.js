@@ -21,6 +21,9 @@ let historyOffset = 0;
 let historySearchTimeout = null;
 let historyRequestId = 0;
 const historyPageSize = 50;
+let logEntries = [];
+let logSort = { field: "timestamp", direction: "desc" };
+let logEmptyMessage = "No service logs yet.";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -103,6 +106,7 @@ function populateTimezones() {
 function renderDevices() {
   if (!settings.devices.length) {
     elements.devices.innerHTML = '<div class="empty-state">No devices paired yet. Add one below to get started.</div>';
+    renderPlayerDevices();
     return;
   }
   elements.devices.innerHTML = settings.devices.map((device, index) => `
@@ -112,6 +116,20 @@ function renderDevices() {
       <label class="offset-label">Skip offset (ms)<input data-field="offset" type="number" min="-60000" max="60000" step="10" value="${Number(device.offset) || 0}"></label>
       <button class="button button-quiet remove-device" type="button">Remove</button>
     </div>`).join("");
+  renderPlayerDevices();
+}
+
+function renderPlayerDevices() {
+  const select = document.querySelector("#play-video-form select[name='screen_id']");
+  if (!select) return;
+  const previous = select.value;
+  const devices = settings?.devices || [];
+  select.innerHTML = devices.map((device) => `
+    <option value="${escapeHtml(device.screen_id)}">${escapeHtml(device.name || device.screen_id)}</option>
+  `).join("");
+  if (devices.some((device) => device.screen_id === previous)) select.value = previous;
+  select.disabled = devices.length === 0;
+  document.querySelector("#play-video-form button[type='submit']").disabled = devices.length === 0;
 }
 
 function renderChannels() {
@@ -204,26 +222,103 @@ async function refreshService() {
 async function refreshLogs() {
   try {
     const result = await api("/api/logs?limit=1000");
-    const nearBottom = elements.logOutput.scrollHeight - elements.logOutput.scrollTop - elements.logOutput.clientHeight < 80;
-    elements.logOutput.innerHTML = result.lines.length
-      ? result.lines.map((line) => {
-        const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}[T ][0-9:.+Z-]+)\s*/);
-        const timestamp = timestampMatch?.[1] || "";
-        const remainder = timestampMatch ? line.slice(timestampMatch[0].length) : line;
-        const levelMatch = remainder.match(/^\s*(?:\[)?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b/i);
-        const level = levelMatch?.[1]?.toUpperCase() || "LOG";
-        const message = levelMatch
-          ? remainder.replace(/^\s*\[?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b\]?\s*[:| -]?\s*/i, "")
-          : remainder;
-        return `<div class="log-entry log-${level.toLowerCase()}"><time>${escapeHtml(timestamp)}</time><span class="log-level">${level}</span><span class="log-message">${escapeHtml(message)}</span></div>`;
-      }).join("")
-      : '<div class="log-empty">No service logs yet.</div>';
+    const wasAtTop = elements.logOutput.scrollTop < 80;
+    logEntries = result.lines.map(parseLogEntry);
+    logEmptyMessage = "No service logs yet.";
+    renderLogs();
     document.querySelector("#log-count").textContent = `(${result.lines.length})`;
-    if (nearBottom) elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+    if (wasAtTop) elements.logOutput.scrollTop = 0;
   } catch (error) {
-    elements.logOutput.textContent = error.message;
+    document.querySelector("#log-entries").innerHTML =
+      `<tr><td class="log-empty" colspan="4">${escapeHtml(error.message)}</td></tr>`;
   }
 }
+
+function parseLogEntry(line, index) {
+  const timestampMatch = line.match(
+    /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s*/,
+  );
+  const timestamp = timestampMatch?.[1] || "";
+  const remainder = timestampMatch ? line.slice(timestampMatch[0].length) : line;
+  const structuredMatch = remainder.match(
+    /^\s*-\s*(.*?)\s*-\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*-\s*(.*)$/i,
+  );
+  const levelMatch = remainder.match(/^\s*(?:\[)?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b/i);
+  const level = structuredMatch?.[2]?.toUpperCase() || levelMatch?.[1]?.toUpperCase() || "LOG";
+  const source = structuredMatch?.[1] || "";
+  const message = structuredMatch
+    ? structuredMatch[3]
+    : levelMatch
+      ? remainder.replace(/^\s*\[?(DEBUG|INFO|WARNING|ERROR|CRITICAL)\b\]?\s*[:| -]?\s*/i, "")
+      : remainder;
+  const parsedTimestamp = Date.parse(timestamp.replace(",", "."));
+  return {
+    timestamp,
+    timestampValue: Number.isNaN(parsedTimestamp) ? null : parsedTimestamp,
+    level,
+    source,
+    message,
+    index,
+  };
+}
+
+function renderLogs() {
+  const body = document.querySelector("#log-entries");
+  const headers = elements.logOutput.querySelectorAll("th[data-log-sort]");
+  for (const header of headers) {
+    const field = header.dataset.logSort;
+    const active = field === logSort.field;
+    header.setAttribute(
+      "aria-sort",
+      active ? (logSort.direction === "asc" ? "ascending" : "descending") : "none",
+    );
+    const button = header.querySelector("button");
+    button.classList.toggle("active", active);
+    button.querySelector("span")?.remove();
+    if (active) {
+      const arrow = document.createElement("span");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = logSort.direction === "asc" ? "↑" : "↓";
+      button.append(" ", arrow);
+    }
+  }
+  const orderedEntries = [...logEntries].sort((first, second) => {
+    let comparison = 0;
+    if (logSort.field === "timestamp") {
+      if (first.timestampValue === null && second.timestampValue !== null) return 1;
+      if (first.timestampValue !== null && second.timestampValue === null) return -1;
+      comparison = (first.timestampValue ?? 0) - (second.timestampValue ?? 0);
+    } else {
+      comparison = first[logSort.field].localeCompare(second[logSort.field], undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+    return comparison === 0
+      ? second.index - first.index
+      : comparison * (logSort.direction === "asc" ? 1 : -1);
+  });
+  body.innerHTML = orderedEntries.length
+    ? orderedEntries.map((entry) => `
+      <tr class="log-${entry.level.toLowerCase()}">
+        <td><time>${escapeHtml(entry.timestamp)}</time></td>
+        <td><span class="log-level">${escapeHtml(entry.level)}</span></td>
+        <td>${escapeHtml(entry.source)}</td>
+        <td class="log-message">${escapeHtml(entry.message)}</td>
+      </tr>`).join("")
+    : `<tr><td class="log-empty" colspan="4">${escapeHtml(logEmptyMessage)}</td></tr>`;
+}
+
+elements.logOutput.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-log-sort]");
+  if (!button) return;
+  const field = button.dataset.logSort;
+  logSort = {
+    field,
+    direction: logSort.field === field && logSort.direction === "asc" ? "desc" : "asc",
+  };
+  renderLogs();
+});
 
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(Number(seconds) || 0));
@@ -308,6 +403,12 @@ async function refreshNowPlaying() {
             <a class="now-playing-title" href="https://www.youtube.com/watch?v=${encodeURIComponent(item.video_id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title || item.video_id)}</a>
             <span class="now-playing-channel">${escapeHtml(item.channel || "Unknown channel")}</span>
             <span class="now-playing-device">${escapeHtml(item.device)}</span>
+            ${item.viewed_percent === null ? '<span class="now-playing-progress-label">Progress unavailable</span>' : `
+              <div class="now-playing-progress">
+                <span>Watched ${Number(item.viewed_percent).toFixed(0)}%</span>
+                <progress max="100" value="${Number(item.viewed_percent)}" aria-label="Watched ${Number(item.viewed_percent).toFixed(0)} percent"></progress>
+              </div>`}
+            <button class="button button-quiet pause-device" type="button" data-screen-id="${escapeHtml(item.screen_id)}">Pause</button>
           </div>
         </article>`).join("")
       : '<div class="empty-state">Nothing is currently playing.</div>';
@@ -315,6 +416,47 @@ async function refreshNowPlaying() {
     content.textContent = `Could not load current playback: ${error.message}`;
   }
 }
+
+document.querySelector("#now-playing-content").addEventListener("click", async (event) => {
+  const button = event.target.closest(".pause-device");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await api("/api/devices/pause", {
+      method: "POST",
+      body: JSON.stringify({ screen_id: button.dataset.screenId }),
+    });
+    notify("Playback paused.");
+    await refreshNowPlaying();
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.querySelector("#play-video-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await api("/api/devices/play-video", {
+      method: "POST",
+      body: JSON.stringify({
+        screen_id: form.elements.screen_id.value,
+        video: form.elements.video.value.trim(),
+      }),
+    });
+    form.elements.video.value = "";
+    notify("Video sent to the TV.");
+    await refreshNowPlaying();
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    button.disabled = settings.devices.length === 0;
+  }
+});
 
 async function refreshStats() {
   const stats = await api("/api/stats");
@@ -571,6 +713,7 @@ elements.devices.addEventListener("input", (event) => {
   const row = event.target.closest(".device-row");
   const device = settings.devices[Number(row.dataset.index)];
   device[field] = field === "offset" ? Number(event.target.value || 0) : event.target.value;
+  renderPlayerDevices();
 });
 
 elements.devices.addEventListener("click", (event) => {
@@ -748,7 +891,10 @@ document.querySelector("#load-more-history").addEventListener("click", () => {
   refreshHistory(false).catch((error) => notify(error.message, true));
 });
 document.querySelector("#clear-logs").addEventListener("click", () => {
-  elements.logOutput.textContent = "Log view cleared. Service output will reappear on refresh.";
+  logEntries = [];
+  logEmptyMessage = "Log view cleared. Service output will reappear on refresh.";
+  renderLogs();
+  document.querySelector("#log-count").textContent = "(0)";
 });
 document.querySelector("#delete-logs").addEventListener("click", async () => {
   if (!window.confirm("Permanently delete all saved service logs, including the rotated log file?")) return;

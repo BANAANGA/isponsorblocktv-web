@@ -136,7 +136,14 @@ def install_activity_hooks(store: ActivityStore) -> None:
         if watched_seconds:
             store.record_watch_time(video_id, self.name, watched_seconds)
         self._webui_last_playback = (video_id, is_playing, position, time_start)
-        store.set_now_playing(video_id, self.name, playing=is_playing)
+        store.set_now_playing(
+            video_id,
+            self.name,
+            playing=is_playing,
+            screen_id=self.lounge_controller.auth.screen_id or "",
+            position_seconds=position,
+            duration_seconds=duration,
+        )
         if video_id and is_playing:
             self._webui_current_video_id = video_id
             if store.record_video_history:
