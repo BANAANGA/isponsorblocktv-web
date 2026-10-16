@@ -39,6 +39,16 @@ class ActivityStoreTests(unittest.TestCase):
 
         self.assertEqual(self.store.history()["total"], 2)
 
+    def test_history_search_filters_video_metadata_and_escapes_wildcards(self) -> None:
+        self.store.record_video("video-1", "Red triangle", "Example channel", 1)
+        self.store.record_video("video-2", "100% complete", "Other channel", 1)
+        self.store.record_video("video-3", "Another video", "Kitchen TV", 1)
+
+        self.assertEqual(self.store.history(search="example")["items"][0]["video_id"], "video-1")
+        self.assertEqual(self.store.history(search="Kitchen")["items"][0]["video_id"], "video-3")
+        self.assertEqual(self.store.history(search="%")["items"][0]["video_id"], "video-2")
+        self.assertEqual(self.store.history(search="missing")["total"], 0)
+
     def test_stats_aggregate_total_category_device_and_recent_activity(self) -> None:
         now = datetime.now(UTC)
         self.store.record_video("video-1", "Video", "Living room", 2, now=now)

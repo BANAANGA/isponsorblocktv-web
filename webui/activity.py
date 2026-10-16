@@ -210,22 +210,37 @@ class ActivityStore:
                 ],
             )
 
-    def history(self, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+    def history(self, limit: int = 100, offset: int = 0, search: str = "") -> dict[str, Any]:
+        search = search.strip()
+        pattern = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT video_id, title, channel, channel_url, thumbnail_url,
                     device, started_at, last_seen_at, segment_count
-                FROM video_history ORDER BY started_at DESC LIMIT ? OFFSET ?
+                FROM video_history
+                WHERE (? = '' OR video_id LIKE ? ESCAPE '\\'
+                    OR title LIKE ? ESCAPE '\\' OR channel LIKE ? ESCAPE '\\'
+                    OR device LIKE ? ESCAPE '\\')
+                ORDER BY started_at DESC LIMIT ? OFFSET ?
                 """,
-                (limit, offset),
+                (search, pattern, pattern, pattern, pattern, limit, offset),
             ).fetchall()
-            total = connection.execute("SELECT COUNT(*) FROM video_history").fetchone()[0]
+            total = connection.execute(
+                """
+                SELECT COUNT(*) FROM video_history
+                WHERE (? = '' OR video_id LIKE ? ESCAPE '\\'
+                    OR title LIKE ? ESCAPE '\\' OR channel LIKE ? ESCAPE '\\'
+                    OR device LIKE ? ESCAPE '\\')
+                """,
+                (search, pattern, pattern, pattern, pattern),
+            ).fetchone()[0]
         return {
             "items": [dict(row) for row in rows],
             "total": total,
             "limit": limit,
             "offset": offset,
+            "search": search,
         }
 
     def stats(self) -> dict[str, Any]:

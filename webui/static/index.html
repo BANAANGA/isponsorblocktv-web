@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark light">
     <title>iSponsorBlockTV Web</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="iSponsorBlockTV Web home">
-          <span class="brand-mark">iS</span>
+          <img class="brand-mark" src="/static/favicon.svg" alt="">
           <span>iSponsorBlockTV <small>WEB MANAGER</small></span>
         </a>
         <div id="header-actions" class="header-actions" hidden>
@@ -46,10 +47,10 @@
         </div>
 
         <nav class="tabs" aria-label="Management sections">
-          <button class="tab" data-tab="settings" type="button">Settings</button>
-          <button class="tab" data-tab="history" type="button">Video history</button>
           <button class="tab active" data-tab="stats" type="button">Stats</button>
+          <button class="tab" data-tab="history" type="button">Video history</button>
           <button class="tab" data-tab="logs" type="button">Logs <span id="log-count" class="count"></span></button>
+          <button class="tab" data-tab="settings" type="button">Settings</button>
         </nav>
 
         <section id="settings-tab" class="tab-content" hidden>
@@ -142,6 +143,9 @@
               <div><h2>Video history</h2><p>Videos observed while the service monitored your devices.</p></div>
               <button id="refresh-history" class="button button-secondary" type="button">Refresh</button>
             </div>
+            <label class="history-search">Search video history
+              <input id="history-search" type="search" maxlength="200" placeholder="Search title, channel, device, or video ID" autocomplete="off">
+            </label>
             <div id="history-list" class="history-list"></div>
             <div class="history-footer">
               <span id="history-summary" class="empty-state"></span>
@@ -198,12 +202,12 @@
                 <button id="clear-logs" class="button button-quiet" type="button">Clear view</button>
               </div>
             </div>
-            <pre id="log-output" class="log-output" aria-live="polite">Loading logs...</pre>
+            <div id="log-output" class="log-output" role="log" aria-live="polite">Loading logs...</div>
           </div>
         </section>
       </section>
       <div id="toast" class="toast" role="status" hidden></div>
     </main>
-    <script src="/static/app.js?v=category-pie-chart" defer></script>
+    <script src="/static/app.js?v=history-search-logo-logs" defer></script>
   </body>
 </html>

@@ -455,10 +455,12 @@ async def get_logs(limit: int = 500) -> dict[str, Any]:
 
 
 @app.get("/api/history", dependencies=[Depends(require_auth)])
-async def get_video_history(limit: int = 100, offset: int = 0) -> dict[str, Any]:
+async def get_video_history(limit: int = 100, offset: int = 0, search: str = "") -> dict[str, Any]:
     if not 1 <= limit <= 500 or offset < 0:
         raise HTTPException(status_code=422, detail="Limit must be 1-500 and offset cannot be negative")
-    return activity_store.history(limit, offset)
+    if len(search) > 200:
+        raise HTTPException(status_code=422, detail="Search must be 200 characters or fewer")
+    return activity_store.history(limit, offset, search)
 
 
 @app.get("/api/stats", dependencies=[Depends(require_auth)])
