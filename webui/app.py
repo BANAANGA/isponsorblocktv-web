@@ -563,8 +563,10 @@ async def delete_video_history() -> dict[str, bool]:
 
 
 @app.get("/api/stats", dependencies=[Depends(require_auth)])
-async def get_statistics() -> dict[str, Any]:
-    return activity_store.stats(load_runtime_options()["timezone"])
+async def get_statistics(
+    period: Literal["day", "week", "month", "year"] = "day",
+) -> dict[str, Any]:
+    return activity_store.stats(load_runtime_options()["timezone"], period)
 
 
 @app.get("/api/now-playing", dependencies=[Depends(require_auth)])

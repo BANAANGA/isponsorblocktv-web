@@ -167,6 +167,39 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertEqual(los_angeles_stats["by_hour"][20]["seconds_saved"], 45)
         self.assertEqual(los_angeles_stats["by_weekday"][6]["watched_seconds"], 120)
 
+    def test_historical_activity_groups_all_recorded_periods_in_selected_timezone(self) -> None:
+        first = datetime(2025, 12, 31, 23, tzinfo=UTC)
+        second = datetime(2026, 1, 8, 12, tzinfo=UTC)
+        self.store.record_watch_time("video-1", "Living room", 120, now=first)
+        self.store.record_skip(
+            "video-1", "Living room", 30, 1, {"sponsor": 1}, {"sponsor": 30}, now=first
+        )
+        self.store.record_skip(
+            "video-2", "Living room", 60, 2, {"intro": 2}, {"intro": 60}, now=second
+        )
+
+        day_stats = self.store.stats("Europe/Amsterdam", "day")["historical"]
+
+        self.assertEqual(
+            [item["period"] for item in day_stats],
+            [f"2026-01-{day:02d}" for day in range(1, 9)],
+        )
+        self.assertEqual(day_stats[0]["watched_seconds"], 120)
+        self.assertEqual(day_stats[0]["seconds_saved"], 30)
+        self.assertEqual(day_stats[0]["skip_events"], 1)
+        self.assertEqual(day_stats[1]["watched_seconds"], 0)
+        self.assertEqual(day_stats[1]["seconds_saved"], 0)
+
+        week_stats = self.store.stats("Europe/Amsterdam", "week")["historical"]
+        self.assertEqual([item["period"] for item in week_stats], ["2026-W01", "2026-W02"])
+        month_stats = self.store.stats("Europe/Amsterdam", "month")["historical"]
+        self.assertEqual([item["period"] for item in month_stats], ["2026-01"])
+        year_stats = self.store.stats("Europe/Amsterdam", "year")["historical"]
+        self.assertEqual([item["period"] for item in year_stats], ["2026"])
+        self.assertEqual(year_stats[0]["watched_seconds"], 120)
+        self.assertEqual(year_stats[0]["seconds_saved"], 90)
+        self.assertEqual(year_stats[0]["skip_events"], 2)
+
     def test_clear_history_removes_video_and_activity_records(self) -> None:
         now = datetime.now(UTC)
         self.store.record_video("video-1", "Video", "Living room", 1, now=now)

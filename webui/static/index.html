@@ -220,9 +220,19 @@
                 <div id="device-stats" class="stats-list"></div>
               </div>
               <div class="card">
-                <div class="card-heading"><div><h2>Daily watch and skip time</h2><p>Estimated watched and skipped time per day over the last 30 days.</p></div></div>
+                <div class="card-heading">
+                  <div><h2>Historical activity</h2><p>Estimated watched and skipped time for every recorded period.</p></div>
+                  <label class="history-period-label">Group by
+                    <select id="historical-period">
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                      <option value="year">Year</option>
+                    </select>
+                  </label>
+                </div>
                 <div class="daily-legend"><span><i class="daily-watch-key"></i>Watched</span><span><i class="daily-skip-key"></i>Skipped</span></div>
-                <div id="daily-stats" class="daily-chart"></div>
+                <div id="historical-stats" class="daily-chart historical-chart"></div>
               </div>
               <div class="card">
                 <div class="card-heading"><div><h2>Activity by hour</h2><p>Watched and skipped minutes for each hour in your selected time zone.</p></div></div>

@@ -515,7 +515,13 @@ class ActivityStore:
             "search": search,
         }
 
-    def stats(self, timezone_name: str = "UTC") -> dict[str, Any]:
+    def stats(
+        self,
+        timezone_name: str = "UTC",
+        historical_period: str = "day",
+    ) -> dict[str, Any]:
+        if historical_period not in {"day", "week", "month", "year"}:
+            raise ValueError("Historical period must be day, week, month, or year")
         timezone = ZoneInfo(timezone_name)
         cutoff = (datetime.now(UTC) - timedelta(days=30)).isoformat()
         with self._connect() as connection:
@@ -596,14 +602,91 @@ class ActivityStore:
         watched_by_weekday = [0.0] * 7
         skipped_by_hour = [0.0] * 24
         skipped_by_weekday = [0.0] * 7
+        historical: dict[str, dict[str, Any]] = {}
+
+        def period_key(local_time: datetime, granularity: str) -> str:
+            if granularity == "day":
+                return local_time.date().isoformat()
+            if granularity == "week":
+                iso_year, iso_week, _ = local_time.isocalendar()
+                return f"{iso_year}-W{iso_week:02d}"
+            if granularity == "month":
+                return local_time.strftime("%Y-%m")
+            return str(local_time.year)
+
+        def historical_entry(
+            local_time: datetime,
+            watched: float = 0,
+            skipped: float = 0,
+            skip_events: int = 0,
+        ) -> None:
+            key = period_key(local_time, historical_period)
+            entry = historical.setdefault(
+                key,
+                {
+                    "period": key,
+                    "watched_seconds": 0.0,
+                    "seconds_saved": 0.0,
+                    "skip_events": 0,
+                },
+            )
+            entry["watched_seconds"] += watched
+            entry["seconds_saved"] += skipped
+            entry["skip_events"] += skip_events
+
+        def complete_historical_periods() -> list[dict[str, Any]]:
+            period_starts = {
+                "day": lambda key: datetime.fromisoformat(key),
+                "week": lambda key: datetime.strptime(f"{key}-1", "%G-W%V-%u"),
+                "month": lambda key: datetime.strptime(f"{key}-01", "%Y-%m-%d"),
+                "year": lambda key: datetime.strptime(f"{key}-01-01", "%Y-%m-%d"),
+            }
+            keys = sorted(historical)
+            if not keys:
+                return []
+            current = period_starts[historical_period](keys[0])
+            last = period_starts[historical_period](keys[-1])
+            while current < last:
+                key = period_key(current, historical_period)
+                historical.setdefault(
+                    key,
+                    {
+                        "period": key,
+                        "watched_seconds": 0.0,
+                        "seconds_saved": 0.0,
+                        "skip_events": 0,
+                    },
+                )
+                if historical_period == "day":
+                    current += timedelta(days=1)
+                elif historical_period == "week":
+                    current += timedelta(weeks=1)
+                elif historical_period == "month":
+                    current = current.replace(
+                        year=current.year + (current.month == 12),
+                        month=current.month % 12 + 1,
+                    )
+                else:
+                    current = current.replace(year=current.year + 1)
+            return [
+                {
+                    **entry,
+                    "watched_seconds": round(float(entry["watched_seconds"]), 1),
+                    "seconds_saved": round(float(entry["seconds_saved"]), 1),
+                }
+                for _, entry in sorted(historical.items())
+            ]
+
         for row in watch_buckets:
             local_time = datetime.fromisoformat(row["bucket_start"]).astimezone(timezone)
             watched_by_hour[local_time.hour] += row["watched_seconds"]
             watched_by_weekday[local_time.weekday()] += row["watched_seconds"]
+            historical_entry(local_time, watched=row["watched_seconds"])
         for row in skip_times:
             local_time = datetime.fromisoformat(row["skipped_at"]).astimezone(timezone)
             skipped_by_hour[local_time.hour] += row["seconds_saved"]
             skipped_by_weekday[local_time.weekday()] += row["seconds_saved"]
+            historical_entry(local_time, skipped=row["seconds_saved"], skip_events=1)
         return {
             "totals": {
                 "videos_watched": video_count,
@@ -623,6 +706,7 @@ class ActivityStore:
             "by_category": [dict(row) for row in categories],
             "by_device": [dict(row) for row in devices],
             "daily": [dict(row) for row in daily],
+            "historical": complete_historical_periods(),
             "top_videos": [dict(row) for row in top_videos],
             "by_hour": [
                 {

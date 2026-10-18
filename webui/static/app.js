@@ -20,6 +20,7 @@ let toastTimeout = null;
 let historyOffset = 0;
 let historySearchTimeout = null;
 let historyRequestId = 0;
+let currentStats = null;
 const historyPageSize = 50;
 let logEntries = [];
 let logSort = { field: "timestamp", direction: "desc" };
@@ -421,7 +422,9 @@ document.querySelector("#now-playing-content").addEventListener("click", async (
 });
 
 async function refreshStats() {
-  const stats = await api("/api/stats");
+  const period = document.querySelector("#historical-period").value;
+  const stats = await api(`/api/stats?period=${encodeURIComponent(period)}`);
+  currentStats = stats;
   const total = stats.totals;
   const recent = stats.last_30_days;
   document.querySelector("#total-stats").innerHTML = [
@@ -541,28 +544,7 @@ async function refreshStats() {
       <small>${escapeHtml(formatDuration(device.seconds_saved))} saved</small></article>`).join("")
     : '<div class="empty-state">Device skip statistics will appear here.</div>';
 
-  const daily = document.querySelector("#daily-stats");
-  if (!stats.daily.length) {
-    daily.innerHTML = '<div class="empty-state">Daily activity will appear after the first skip.</div>';
-  } else {
-    const maxSeconds = Math.max(1, ...stats.daily.flatMap((item) => [
-      Number(item.watched_seconds) || 0,
-      Number(item.seconds_saved) || 0,
-    ]));
-    daily.innerHTML = stats.daily.map((item) => {
-      const watched = Number(item.watched_seconds) || 0;
-      const skipped = Number(item.seconds_saved) || 0;
-      const watchedWidth = watched ? Math.max(2, watched / maxSeconds * 100) : 0;
-      const skippedWidth = skipped ? Math.max(2, skipped / maxSeconds * 100) : 0;
-      return `<div class="daily-row daily-comparison-row" title="${escapeHtml(item.day)}: ${escapeHtml(formatDuration(watched))} watched, ${escapeHtml(formatDuration(skipped))} skipped">
-        <time>${escapeHtml(item.day.slice(5))}</time>
-        <span class="daily-comparison-bars">
-          <span class="daily-bar-track"><progress class="daily-bar daily-watch-bar" value="${watchedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(watched))} watched"></progress></span>
-          <span class="daily-bar-track"><progress class="daily-bar daily-skip-bar" value="${skippedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(skipped))} skipped"></progress></span>
-        </span>
-        <strong>${escapeHtml(formatDuration(watched))} / ${escapeHtml(formatDuration(skipped))}</strong></div>`;
-    }).join("");
-  }
+  renderHistoricalActivity(stats);
 
   const topVideos = document.querySelector("#top-video-stats");
   if (!stats.top_videos.length) {
@@ -624,6 +606,36 @@ async function refreshStats() {
   renderActivityPattern(stats.by_hour, "hour");
   renderActivityPattern(stats.by_weekday, "weekday");
 }
+
+function renderHistoricalActivity(stats) {
+  const chart = document.querySelector("#historical-stats");
+  const entries = stats?.historical || [];
+  if (!entries.length) {
+    chart.innerHTML = '<div class="empty-state">Historical activity will appear as playback and skip data are recorded.</div>';
+    return;
+  }
+  const maxSeconds = Math.max(1, ...entries.flatMap((item) => [
+    Number(item.watched_seconds) || 0,
+    Number(item.seconds_saved) || 0,
+  ]));
+  chart.innerHTML = entries.map((item) => {
+    const watched = Number(item.watched_seconds) || 0;
+    const skipped = Number(item.seconds_saved) || 0;
+    const watchedWidth = watched ? Math.max(2, watched / maxSeconds * 100) : 0;
+    const skippedWidth = skipped ? Math.max(2, skipped / maxSeconds * 100) : 0;
+    return `<div class="daily-row daily-comparison-row" title="${escapeHtml(item.period)}: ${escapeHtml(formatDuration(watched))} watched, ${escapeHtml(formatDuration(skipped))} skipped, ${Number(item.skip_events) || 0} skips">
+      <time>${escapeHtml(item.period)}</time>
+      <span class="daily-comparison-bars">
+        <span class="daily-bar-track"><progress class="daily-bar daily-watch-bar" value="${watchedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(watched))} watched"></progress></span>
+        <span class="daily-bar-track"><progress class="daily-bar daily-skip-bar" value="${skippedWidth.toFixed(1)}" max="100" aria-label="${escapeHtml(formatDuration(skipped))} skipped"></progress></span>
+      </span>
+      <strong>${escapeHtml(formatDuration(watched))} / ${escapeHtml(formatDuration(skipped))}</strong></div>`;
+  }).join("");
+}
+
+document.querySelector("#historical-period").addEventListener("change", () => {
+  refreshStats().catch((error) => notify(error.message, true));
+});
 
 function renderDiscovered(devices) {
   if (!devices.length) {

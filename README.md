@@ -182,8 +182,9 @@ saved logs.
   the last 30 days. The Dashboard tab is the first page shown after sign-in and
   includes a current playback widget with watched percentage and play/pause
   controls for videos already playing on paired devices,
-  plus watched-versus-skipped and category pie charts, daily time comparisons,
-  and a most-watched videos graph.
+  plus watched-versus-skipped and category pie charts, historical watched and
+  skipped time graphs grouped by day, week, month, or year, and a most-watched
+  videos graph.
 - Configure the maximum number of retained video-history entries (100 to
   10,000); oldest entries are automatically removed. Delete viewing history
   and its related activity statistics from the Settings tab when needed.
