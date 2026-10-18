@@ -121,6 +121,9 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .stats-list-row span { color: var(--muted); font-size: 11px; }
 .stats-list-row small { grid-column: 1 / -1; color: var(--accent); font-size: 11px; }
 .daily-chart { display: grid; gap: 8px; }
+.historical-chart { max-height: 460px; overflow-y: auto; padding-right: 5px; }
+.history-period-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.history-period-label select { width: auto; min-width: 110px; padding: 8px 28px 8px 10px; }
 .daily-row { display: grid; grid-template-columns: 40px minmax(50px, 1fr) 42px; align-items: center; gap: 9px; color: var(--muted); font-size: 10px; }
 .daily-row > strong { color: var(--text); font-size: 10px; text-align: right; }
 .daily-bar-track { height: 8px; overflow: hidden; border-radius: 999px; background: #21313d; }
@@ -133,6 +136,7 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .daily-skip-bar::-webkit-progress-value { background: linear-gradient(90deg, #bb303a, var(--accent)); }
 .daily-skip-bar::-moz-progress-bar { background: linear-gradient(90deg, #bb303a, var(--accent)); }
 .daily-comparison-row { grid-template-columns: 42px minmax(80px, 1fr) minmax(90px, auto); }
+.historical-chart .daily-comparison-row { grid-template-columns: 76px minmax(50px, 1fr) minmax(90px, auto); }
 .daily-comparison-bars { display: grid; gap: 3px; }
 .daily-legend { display: flex; gap: 16px; margin: -5px 0 14px; color: var(--muted); font-size: 10px; }
 .daily-legend span { display: inline-flex; align-items: center; gap: 6px; }
