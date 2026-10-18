@@ -39,7 +39,6 @@ p { color: var(--muted); line-height: 1.55; margin-bottom: 0; }
 .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
 .tab { background: none; border: 0; color: var(--muted); padding: 12px 2px; border-bottom: 2px solid transparent; }
 .tab.active { color: var(--text); border-color: var(--accent); }
-.count { color: var(--muted); }
 .card { border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(145deg, #121e29, #101922); padding: 23px; margin-bottom: 16px; }
 .card-heading { align-items: flex-start; margin-bottom: 18px; }
 .card-heading p { font-size: 13px; }
@@ -96,8 +95,10 @@ label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; ga
 .log-table td time { color: #8297a6; white-space: nowrap; }
 .log-level { color: #9bafbe; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
 .log-message { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-.log-warning .log-level { color: #ffd178; }
-.log-error .log-level, .log-critical .log-level { color: var(--danger); }
+.log-warning td { background: #332a16; }
+.log-warning .log-level, .log-warning .log-message { color: #ffd178; }
+.log-error td, .log-critical td { background: #351c20; }
+.log-error .log-level, .log-error .log-message, .log-critical .log-level, .log-critical .log-message { color: #ff858c; }
 .log-debug .log-level { color: #98c9ff; }
 .log-empty { padding: 12px; color: var(--muted); }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }

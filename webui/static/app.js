@@ -211,7 +211,6 @@ async function refreshLogs() {
     logEntries = result.lines.map(parseLogEntry);
     logEmptyMessage = "No service logs yet.";
     renderLogs();
-    document.querySelector("#log-count").textContent = `(${result.lines.length})`;
     if (wasAtTop) elements.logOutput.scrollTop = 0;
   } catch (error) {
     document.querySelector("#log-entries").innerHTML =
@@ -856,7 +855,6 @@ document.querySelector("#clear-logs").addEventListener("click", () => {
   logEntries = [];
   logEmptyMessage = "Log view cleared. Service output will reappear on refresh.";
   renderLogs();
-  document.querySelector("#log-count").textContent = "(0)";
 });
 document.querySelector("#delete-logs").addEventListener("click", async () => {
   if (!window.confirm("Permanently delete all saved service logs, including the rotated log file?")) return;
