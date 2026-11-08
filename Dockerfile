@@ -11,7 +11,9 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* && \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY webui ./webui
+# iSponsorBlockTV 2.11.0 hard-pins aiohttp==3.14.3 (vulnerable), so upgrade it after install
 RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir "aiohttp>=3.14.4" && \
     useradd --system --uid 10001 --create-home webapp && \
     mkdir -p /data && chown webapp:webapp /data
 
