@@ -4,9 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ISPBTV_DATA_DIR=/data
 
-# Pull in OS security patches (zlib1g) and a current pip
+# Pull in OS security patches (zlib1g) and current pip/setuptools
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* && \
-    pip install --no-cache-dir --upgrade "pip>=26.2.0"
+    pip install --no-cache-dir --upgrade "pip>=26.2.0" "setuptools>=84.1.0"
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
